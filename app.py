@@ -7,7 +7,7 @@ import cv2
 st.title("Tomato Ripening Stage Detector 🍅")
 
 # Load your YOLOv8 model
-model = YOLO("best.pt")  # or "fruit best.pt" if you keep that filename
+model = YOLO("fruit best.pt")  # or "fruit best.pt" if you keep that filename
 
 # Upload image (supports iPhone HEIC too)
 uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
