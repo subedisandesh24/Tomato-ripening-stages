@@ -5,10 +5,10 @@ from PIL import Image
 st.title("Tomato Ripening Stage Detector 🍅")
 
 # Load your model
-model = YOLO("best.pt")
+model = YOLO("fruit best.pt")
 
 # Upload image
-uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg"])
+uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
 
 if uploaded:
     img = Image.open(uploaded)
