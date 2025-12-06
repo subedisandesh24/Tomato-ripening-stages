@@ -3,11 +3,12 @@ from ultralytics import YOLO
 from PIL import Image
 import pillow_heif
 import cv2
+import io
 
 st.title("Tomato Ripening Stage Detector 🍅")
 
 # Load your YOLOv8 model
-model = YOLO("fruit best.pt")  # or "fruit best.pt" if you keep that filename
+model = YOLO("fruit best.pt")  # make sure filename matches your repo
 
 # Upload image (supports iPhone HEIC too)
 uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
@@ -36,6 +37,19 @@ if uploaded:
 
     # Show detection results
     st.image(result_img, caption="Detections", use_column_width=True)
+
+    # ✅ Allow user to download detection result
+    result_pil = Image.fromarray(result_img)
+    buf = io.BytesIO()
+    result_pil.save(buf, format="PNG")
+    byte_im = buf.getvalue()
+
+    st.download_button(
+        label="Download Detection Result",
+        data=byte_im,
+        file_name="tomato_detection.png",
+        mime="image/png"
+    )
 
     # Count tomatoes by class
     counts = {}
