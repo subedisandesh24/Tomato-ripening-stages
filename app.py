@@ -5,14 +5,16 @@ import pillow_heif
 import cv2
 import io
 import tempfile
+import os
 
 st.title("Tomato Ripening Stage Detector 🍅")
 
-# Load YOLO model
-model = YOLO("fruitbest.pt")
+# Load YOLO model (make sure fruitbest.pt is in the same folder as app.py)
+model_path = os.path.join(os.path.dirname(__file__), "fruitbest.pt")
+model = YOLO(model_path)
 
 # Create tabs
-tab1, tab2 = st.tabs(["📷 Image Mode", "🎥 Video Mode"])
+tab1, tab2 = st.tabs(["🖼️ Image Mode", "📹 Video Mode"])
 
 # ---------------- IMAGE MODE ----------------
 with tab1:
