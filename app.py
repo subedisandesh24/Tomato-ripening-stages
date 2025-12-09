@@ -1,5 +1,4 @@
 import sys
-st.write(f"Python version: {sys.version}")
 import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
