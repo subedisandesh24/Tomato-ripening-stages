@@ -1,9 +1,9 @@
 streamlit>=1.29
-ultralytics>=8.2
+ultralytics==8.2.0
+torch==2.0.1
 opencv-python-headless
 pillow
 pillow-heif
-torch>=2.0
 numpy
 
 
