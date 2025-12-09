@@ -4,59 +4,77 @@ from PIL import Image
 import pillow_heif
 import cv2
 import io
+import tempfile
 
 st.title("Tomato Ripening Stage Detector 🍅")
 
-# Load your YOLOv8 model
-model = YOLO("fruit best.pt")  # make sure filename matches your repo
+# Load YOLO model
+model = YOLO("fruit_best.pt")
 
-# Upload image (supports iPhone HEIC too)
-uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
+# Create tabs
+tab1, tab2 = st.tabs(["📷 Image Mode", "🎥 Video Mode"])
 
-if uploaded:
-    # Handle HEIC images from iPhone
-    if uploaded.type == "image/heic":
-        heif_file = pillow_heif.read_heif(uploaded.read())
-        img = Image.frombytes(
-            heif_file.mode,
-            heif_file.size,
-            heif_file.data
-        )
-    else:
-        img = Image.open(uploaded)
+# ---------------- IMAGE MODE ----------------
+with tab1:
+    uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
+    if uploaded:
+        # Handle HEIC images
+        if uploaded.type == "image/heic":
+            heif_file = pillow_heif.read_heif(uploaded.read())
+            img = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
+        else:
+            img = Image.open(uploaded)
 
-    # Show original image
-    st.image(img, caption="Uploaded Image", use_column_width=True)
+        st.image(img, caption="Uploaded Image", use_column_width=True)
 
-    # Run YOLO detection
-    results = model(img)
-    result_img = results[0].plot()
+        # Run YOLO detection
+        results = model(img)
+        result_img = results[0].plot()
+        result_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
 
-    # Convert BGR → RGB to preserve true colors
-    result_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
+        st.image(result_img, caption="Detections", use_column_width=True)
 
-    # Show detection results
-    st.image(result_img, caption="Detections", use_column_width=True)
+        # Download button
+        result_pil = Image.fromarray(result_img)
+        buf = io.BytesIO()
+        result_pil.save(buf, format="PNG")
+        st.download_button("Download Detection Result", buf.getvalue(),
+                           file_name="tomato_detection.png", mime="image/png")
 
-    # ✅ Allow user to download detection result
-    result_pil = Image.fromarray(result_img)
-    buf = io.BytesIO()
-    result_pil.save(buf, format="PNG")
-    byte_im = buf.getvalue()
+        # Count tomatoes by ripening stage
+        counts = {"Red": 0, "Green": 0, "Turning": 0}
+        for box in results[0].boxes:
+            cls = int(box.cls[0])
+            label = model.names[cls]
+            if "red" in label.lower():
+                counts["Red"] += 1
+            elif "green" in label.lower():
+                counts["Green"] += 1
+            elif "turning" in label.lower():
+                counts["Turning"] += 1
 
-    st.download_button(
-        label="Download Detection Result",
-        data=byte_im,
-        file_name="tomato_detection.png",
-        mime="image/png"
-    )
+        st.subheader("Tomato Counts by Stage")
+        st.write(counts)
 
-    # Count tomatoes by class
-    counts = {}
-    for box in results[0].boxes:
-        cls = int(box.cls[0])
-        label = model.names[cls]
-        counts[label] = counts.get(label, 0) + 1
+# ---------------- VIDEO MODE ----------------
+with tab2:
+    uploaded_video = st.file_uploader("Upload a tomato video", type=["mp4", "avi", "mov"])
+    if uploaded_video:
+        tfile = tempfile.NamedTemporaryFile(delete=False)
+        tfile.write(uploaded_video.read())
 
-    st.subheader("Tomato Counts")
-    st.write(counts)
+        cap = cv2.VideoCapture(tfile.name)
+        stframe = st.empty()
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            results = model(frame)
+            result_frame = results[0].plot()
+            result_frame = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
+
+            stframe.image(result_frame, channels="RGB", use_column_width=True)
+
+        cap.release()
