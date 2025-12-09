@@ -3,8 +3,9 @@ ultralytics
 opencv-python-headless
 pillow
 pillow-heif
-torch==2.1.0
+torch
 numpy
+
 
 
 
