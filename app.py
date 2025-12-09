@@ -9,7 +9,7 @@ import tempfile
 st.title("Tomato Ripening Stage Detector 🍅")
 
 # Load YOLO model
-model = YOLO("fruit_best.pt")
+model = YOLO("fruitbest.pt")
 
 # Create tabs
 tab1, tab2 = st.tabs(["📷 Image Mode", "🎥 Video Mode"])
