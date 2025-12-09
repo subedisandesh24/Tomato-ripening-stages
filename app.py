@@ -62,10 +62,23 @@ with tab1:
 with tab2:
     uploaded_video = st.file_uploader("Upload a tomato video", type=["mp4", "avi", "mov"])
     if uploaded_video:
-        tfile = tempfile.NamedTemporaryFile(delete=False)
+        # Save uploaded video to a temporary file
+        tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
         tfile.write(uploaded_video.read())
+        input_path = tfile.name
 
-        cap = cv2.VideoCapture(tfile.name)
+        # Prepare output path
+        output_path = input_path.replace(".mp4", "_detected.mp4")
+
+        # Open video reader and writer
+        cap = cv2.VideoCapture(input_path)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
         stframe = st.empty()
 
         while cap.isOpened():
@@ -73,10 +86,25 @@ with tab2:
             if not ret:
                 break
 
+            # Run YOLO detection
             results = model(frame)
             result_frame = results[0].plot()
-            result_frame = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
 
-            stframe.image(result_frame, channels="RGB", use_column_width=True)
+            # Write annotated frame to output video
+            out.write(result_frame)
+
+            # Show live preview
+            result_frame_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
+            stframe.image(result_frame_rgb, channels="RGB", use_column_width=True)
 
         cap.release()
+        out.release()
+
+        # Offer download of the detected video
+        with open(output_path, "rb") as f:
+            st.download_button(
+                label="Download Detected Video",
+                data=f.read(),
+                file_name="tomato_detected.mp4",
+                mime="video/mp4"
+            )
