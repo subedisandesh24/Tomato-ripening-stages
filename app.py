@@ -9,8 +9,8 @@ import os
 
 st.title("Tomato Ripening Stage Detector 🍅")
 
-# Load YOLO model (make sure fruitbest.pt is in the same folder as app.py)
-model_path = os.path.join(os.path.dirname(__file__), "fruitbest.pt")
+# Load YOLO model (make sure fruit.pt is in the same folder as app.py)
+model_path = os.path.join(os.path.dirname(__file__), "fruit.pt")
 model = YOLO(model_path)
 
 # Create tabs
