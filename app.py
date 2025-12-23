@@ -39,14 +39,12 @@ with tab1:
 
         st.image(result_img, caption="Detections", use_column_width=True)
 
-        # Download button
         result_pil = Image.fromarray(result_img)
         buf = io.BytesIO()
         result_pil.save(buf, format="PNG")
         st.download_button("Download Detection Result", buf.getvalue(),
                            file_name="tomato_detection.png", mime="image/png")
 
-        # Count tomatoes by ripening stage
         counts = {"Red": 0, "Green": 0, "Turning": 0}
         for box in results[0].boxes:
             cls = int(box.cls[0])
@@ -105,7 +103,6 @@ with tab2:
             )
 
 # ---------------- LEAF DISEASE CLASSIFIER ----------------
-# ---------------- LEAF DISEASE CLASSIFIER ----------------
 with tab3:
     disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
     if disease_file:
@@ -120,7 +117,6 @@ with tab3:
         disease_results = disease_model(disease_img)
         probs = disease_results[0].probs
 
-        # Top-3 predictions
         top3_indices = probs.top5[:3]
         st.subheader("Top-3 Disease Predictions 🌿")
         for idx in top3_indices:
@@ -131,9 +127,7 @@ with tab3:
             else:
                 st.write(f"- {class_name}: {confidence:.2f}")
 
-        # Show management strategy only for top-1 disease
         major_class = disease_model.names[probs.top1].lower()
-
         st.subheader("Recommended Management Strategy 🌿")
 
         if "bacterial spot" in major_class:
