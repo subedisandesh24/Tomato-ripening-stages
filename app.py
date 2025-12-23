@@ -1,110 +1,3 @@
-import streamlit as st
-from ultralytics import YOLO
-from PIL import Image
-import pillow_heif
-import cv2
-import io
-import tempfile
-import os
-import numpy as np
-
-st.title("Tomato Monitoring System 🍅🌿")
-
-# ---------------- Load Models ----------------
-fruit_model = YOLO(os.path.join(os.path.dirname(__file__), "fruit.pt"))
-disease_model = YOLO(os.path.join(os.path.dirname(__file__), "leafdisease.pt"))
-
-# ---------------- Tabs ----------------
-tab1, tab2, tab3 = st.tabs([
-    "🖼️ Fruit Image Detector", 
-    "📹 Fruit Video Detector", 
-    "🦠 Leaf Disease Classifier"
-])
-
-# ---------------- FRUIT IMAGE DETECTOR ----------------
-with tab1:
-    uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
-    if uploaded:
-        if uploaded.type == "image/heic":
-            heif_file = pillow_heif.read_heif(uploaded.read())
-            img = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
-        else:
-            img = Image.open(uploaded)
-
-        st.image(img, caption="Uploaded Image", use_column_width=True)
-
-        results = fruit_model(img)
-        result_img = results[0].plot()
-        result_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
-
-        st.image(result_img, caption="Detections", use_column_width=True)
-
-        # Download button
-        result_pil = Image.fromarray(result_img)
-        buf = io.BytesIO()
-        result_pil.save(buf, format="PNG")
-        st.download_button("Download Detection Result", buf.getvalue(),
-                           file_name="tomato_detection.png", mime="image/png")
-
-        # Count tomatoes by ripening stage
-        counts = {"Red": 0, "Green": 0, "Turning": 0}
-        for box in results[0].boxes:
-            cls = int(box.cls[0])
-            label = fruit_model.names[cls]
-            if "red" in label.lower():
-                counts["Red"] += 1
-            elif "green" in label.lower():
-                counts["Green"] += 1
-            elif "turning" in label.lower():
-                counts["Turning"] += 1
-
-        st.subheader("Tomato Counts by Stage")
-        st.write(counts)
-
-# ---------------- FRUIT VIDEO DETECTOR ----------------
-with tab2:
-    uploaded_video = st.file_uploader("Upload a tomato video", type=["mp4", "avi", "mov"])
-    if uploaded_video:
-        tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-        tfile.write(uploaded_video.read())
-        input_path = tfile.name
-        output_path = input_path.replace(".mp4", "_detected.mp4")
-
-        cap = cv2.VideoCapture(input_path)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-
-        stframe = st.empty()
-
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            results = fruit_model(frame)
-            result_frame = results[0].plot()
-
-            out.write(result_frame)
-
-            result_frame_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
-            stframe.image(result_frame_rgb, channels="RGB", use_column_width=True)
-
-        cap.release()
-        out.release()
-
-        with open(output_path, "rb") as f:
-            st.download_button(
-                label="Download Detected Video",
-                data=f.read(),
-                file_name="tomato_detected.mp4",
-                mime="video/mp4"
-            )
-
-# ---------------- LEAF DISEASE CLASSIFIER ----------------
 # ---------------- LEAF DISEASE CLASSIFIER ----------------
 with tab3:
     disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
@@ -122,7 +15,7 @@ with tab3:
 
         # Top-3 predictions
         top3_indices = probs.top5[:3]
-        st.subheader("Top-3 Disease Predictions 🦠")
+        st.subheader("Top-3 Disease Predictions 🌿")
         for idx in top3_indices:
             class_name = disease_model.names[idx]
             confidence = probs.data[idx]
@@ -131,15 +24,13 @@ with tab3:
             else:
                 st.write(f"- {class_name}: {confidence:.2f}")
 
-        # Identify major disease (highest confidence)
-        major_idx = probs.top1
-        major_class = disease_model.names[major_idx].lower()
+        # Show management strategy for top-1 disease only
+        major_class = disease_model.names[probs.top1].lower()
 
-        st.subheader("Recommended Management 🌿")
+        st.subheader("Recommended Management Strategy 🌿")
 
         if "bacterial spot" in major_class:
             st.write("""
-**Disease:** Bacterial Spot  
 **Chemical:** Copper Oxychloride 50% WP  
 **Brands (Nepal):** Blitox, Blue Copper, Cu-50  
 **Dosage:** 2–3 g per liter of water  
@@ -148,60 +39,55 @@ with tab3:
 
         elif "early blight" in major_class or "late blight" in major_class:
             st.write("""
-**Disease:** Early Blight / Late Blight  
-**Protective Chemical:** Mancozeb 75% WP (Dithane M-45, Indofil M-45)  
-**Curative Chemical:** Metalaxyl 8% + Mancozeb 64% WP (Krilaxyl, Ridomil Gold, Matco)  
-**Dosage:** 2 g per liter of water  
-**Note:** Most devastating during monsoon, ensure preventive sprays
+**Protective Chemical:** Mancozeb 75% WP  
+**Brands:** Dithane M-45, Indofil M-45  
+**Curative Chemical:** Metalaxyl 8% + Mancozeb 64% WP  
+**Brands:** Krilaxyl, Ridomil Gold, Matco  
+**Dosage:** 2 g per liter of water
             """)
 
         elif "leaf mold" in major_class:
             st.write("""
-**Disease:** Leaf Mold  
-**Chemical:** Carbendazim 50% WP (Bavistin, Beve-50)  
-**Alternative:** Chlorothalonil (Kavach)  
-**Dosage:** 1–2 g per liter of water
+**Chemical:** Carbendazim 50% WP  
+**Brands:** Bavistin, Beve-50  
+**Dosage:** 1–2 g per liter of water  
+**Alternative:** Chlorothalonil (Kavach)
             """)
 
         elif "powdery mildew" in major_class:
             st.write("""
-**Disease:** Powdery Mildew  
 **Chemical:** Wettable Sulphur 80% WP or Hexaconazole 5% EC  
-**Brands (Nepal):** Sulfex (Sulphur), Contaf (Hexaconazole), Sitara  
+**Brands:** Sulfex, Contaf, Sitara  
 **Dosage:** 2 g per liter (Sulphur) or 2 ml per liter (Hexaconazole)
             """)
 
         elif "septoria" in major_class:
             st.write("""
-**Disease:** Septoria Leaf Spot  
 **Chemical:** Chlorothalonil 75% WP  
-**Brands (Nepal):** Kavach, Ishan  
+**Brands:** Kavach, Ishan  
 **Dosage:** 2 g per liter of water
             """)
 
         elif "spider mite" in major_class:
             st.write("""
-**Pest:** Spider Mites (Two-spotted)  
 **Chemical:** Abamectin 1.8% or 1.9% EC  
-**Brands (Nepal):** Vertimec, Abacin, V-mectin  
+**Brands:** Vertimec, Abacin, V-mectin  
 **Dosage:** 0.5–1 ml per liter of water  
 **Note:** Spray underside of leaves where mites hide
             """)
 
         elif "target spot" in major_class:
             st.write("""
-**Disease:** Target Spot  
 **Chemical:** Azoxystrobin 23% SC or Mancozeb  
-**Brands (Nepal):** Amistar, Mirador  
+**Brands:** Amistar, Mirador  
 **Dosage:** 1 ml per liter of water
             """)
 
         elif "yellow leaf curl" in major_class or "tylcv" in major_class:
             st.write("""
-**Disease:** Tomato Yellow Leaf Curl Virus (TYLCV)  
-**Note:** Viral disease, no chemical cure. Control whitefly vector.  
-**Chemical (Whitefly control):** Imidacloprid 17.8% SL or Acetamiprid 20% SP  
-**Brands (Nepal):** Confidor, Media, Pride, Manik  
+**Disease Type:** Viral (TYLCV) — no chemical cure  
+**Vector Control:** Whitefly (Bemisia tabaci)  
+**Chemical:** Imidacloprid 17.8% SL or Acetamiprid 20% SP  
+**Brands:** Confidor, Media, Pride, Manik  
 **Dosage:** 0.5 ml (Imidacloprid) or 0.5 g (Acetamiprid) per liter of water
             """)
-
