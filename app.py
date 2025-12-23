@@ -105,6 +105,7 @@ with tab2:
             )
 
 # ---------------- LEAF DISEASE CLASSIFIER ----------------
+# ---------------- LEAF DISEASE CLASSIFIER ----------------
 with tab3:
     disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
     if disease_file:
@@ -130,7 +131,7 @@ with tab3:
             else:
                 st.write(f"- {class_name}: {confidence:.2f}")
 
-        # Show management strategy for top-1 disease only
+        # Show management strategy only for top-1 disease
         major_class = disease_model.names[probs.top1].lower()
 
         st.subheader("Recommended Management Strategy 🌿")
