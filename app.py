@@ -7,20 +7,22 @@ import io
 import tempfile
 import os
 
-st.title("Tomato Ripening Stage Detector 🍅")
+st.title("Tomato Monitoring System 🍅🌿")
 
-# Load YOLO model (make sure fruit.pt is in the same folder as app.py)
-model_path = os.path.join(os.path.dirname(__file__), "fruit.pt")
-model = YOLO(model_path)
+# ---------------- Load Models ----------------
+fruit_model_path = os.path.join(os.path.dirname(__file__), "fruit.pt")
+fruit_model = YOLO(fruit_model_path)
 
-# Create tabs
-tab1, tab2 = st.tabs(["🖼️ Image Mode", "📹 Video Mode"])
+leaf_model_path = os.path.join(os.path.dirname(__file__), "yolov8n-cls.pt")
+leaf_model = YOLO(leaf_model_path)
 
-# ---------------- IMAGE MODE ----------------
+# ---------------- Tabs ----------------
+tab1, tab2, tab3 = st.tabs(["🖼️ Fruit Image Mode", "📹 Fruit Video Mode", "🌿 Leaf Classifier"])
+
+# ---------------- FRUIT IMAGE MODE ----------------
 with tab1:
     uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
     if uploaded:
-        # Handle HEIC images
         if uploaded.type == "image/heic":
             heif_file = pillow_heif.read_heif(uploaded.read())
             img = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
@@ -29,8 +31,7 @@ with tab1:
 
         st.image(img, caption="Uploaded Image", use_column_width=True)
 
-        # Run YOLO detection
-        results = model(img)
+        results = fruit_model(img)
         result_img = results[0].plot()
         result_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
 
@@ -47,7 +48,7 @@ with tab1:
         counts = {"Red": 0, "Green": 0, "Turning": 0}
         for box in results[0].boxes:
             cls = int(box.cls[0])
-            label = model.names[cls]
+            label = fruit_model.names[cls]
             if "red" in label.lower():
                 counts["Red"] += 1
             elif "green" in label.lower():
@@ -58,19 +59,15 @@ with tab1:
         st.subheader("Tomato Counts by Stage")
         st.write(counts)
 
-# ---------------- VIDEO MODE ----------------
+# ---------------- FRUIT VIDEO MODE ----------------
 with tab2:
     uploaded_video = st.file_uploader("Upload a tomato video", type=["mp4", "avi", "mov"])
     if uploaded_video:
-        # Save uploaded video to a temporary file
         tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
         tfile.write(uploaded_video.read())
         input_path = tfile.name
-
-        # Prepare output path
         output_path = input_path.replace(".mp4", "_detected.mp4")
 
-        # Open video reader and writer
         cap = cv2.VideoCapture(input_path)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -86,21 +83,17 @@ with tab2:
             if not ret:
                 break
 
-            # Run YOLO detection
-            results = model(frame)
+            results = fruit_model(frame)
             result_frame = results[0].plot()
 
-            # Write annotated frame to output video
             out.write(result_frame)
 
-            # Show live preview
             result_frame_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
             stframe.image(result_frame_rgb, channels="RGB", use_column_width=True)
 
         cap.release()
         out.release()
 
-        # Offer download of the detected video
         with open(output_path, "rb") as f:
             st.download_button(
                 label="Download Detected Video",
@@ -108,3 +101,30 @@ with tab2:
                 file_name="tomato_detected.mp4",
                 mime="video/mp4"
             )
+
+# ---------------- LEAF CLASSIFIER ----------------
+with tab3:
+    leaf_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
+    if leaf_file:
+        if leaf_file.type == "image/heic":
+            heif_file = pillow_heif.read_heif(leaf_file.read())
+            leaf_img = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
+        else:
+            leaf_img = Image.open(leaf_file)
+
+        st.image(leaf_img, caption="Uploaded Leaf Image", use_column_width=True)
+
+        leaf_results = leaf_model(leaf_img)
+        probs = leaf_results[0].probs  # probability distribution over classes
+
+        # Top-3 predictions
+        top3_indices = probs.top5[:3]
+        st.subheader("Top-3 Predictions 🌿")
+        for idx in top3_indices:
+            class_name = leaf_model.names[idx]
+            confidence = probs.data[idx]
+            st.write(f"{class_name}: {confidence:.2f}")
+
+        # Optional: show bar chart of top-3
+        top3_dict = {leaf_model.names[idx]: float(probs.data[idx]) for idx in top3_indices}
+        st.bar_chart(top3_dict)
