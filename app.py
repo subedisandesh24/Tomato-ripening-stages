@@ -196,3 +196,15 @@ with tab3:
 **Brands:** Confidor, Media, Pride, Manik  
 **Dosage:** 0.5 ml (Imidacloprid) or 0.5 g (Acetamiprid) per liter of water
             """)
+
+        elif "tomato_mosaic_virus" in major_class:
+            st.write("""
+**Disease Type:** Tomato Mosaic Virus (ToMV) — viral disease, no chemical cure  
+**Management Strategy:**  
+- Remove and destroy infected plants to prevent spread  
+- Practice crop rotation and avoid planting tomatoes in the same soil consecutively  
+- Use resistant/tolerant varieties if available  
+- Disinfect tools and equipment regularly  
+- Control insect vectors (aphids, thrips) that may aid transmission  
+**Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
+            """)
