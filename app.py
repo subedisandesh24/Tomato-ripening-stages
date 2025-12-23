@@ -10,18 +10,18 @@ import numpy as np
 
 st.title("Tomato Monitoring System 🍅🌿")
 
-# ---------------- Load Models ----------------
-fruit_model = YOLO(os.path.join(os.path.dirname(__file__), "fruit.pt"))
-disease_model = YOLO(os.path.join(os.path.dirname(__file__), "leafdisease.pt"))
+# Load models
+fruit_model = YOLO("fruit.pt")
+disease_model = YOLO("leafdisease.pt")
 
-# ---------------- Tabs ----------------
+# Define tabs
 tab1, tab2, tab3 = st.tabs([
     "🖼️ Fruit Image Detector", 
     "📹 Fruit Video Detector", 
     "🦠 Leaf Disease Classifier"
 ])
 
-# ---------------- FRUIT IMAGE DETECTOR ----------------
+# Fruit Image Detector
 with tab1:
     uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
     if uploaded:
@@ -59,7 +59,7 @@ with tab1:
         st.subheader("Tomato Counts by Stage")
         st.write(counts)
 
-# ---------------- FRUIT VIDEO DETECTOR ----------------
+# Fruit Video Detector
 with tab2:
     uploaded_video = st.file_uploader("Upload a tomato video", type=["mp4", "avi", "mov"])
     if uploaded_video:
@@ -102,7 +102,7 @@ with tab2:
                 mime="video/mp4"
             )
 
-# ---------------- LEAF DISEASE CLASSIFIER ----------------
+# Leaf Disease Classifier
 with tab3:
     disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
     if disease_file:
