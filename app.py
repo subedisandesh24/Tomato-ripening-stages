@@ -7,6 +7,7 @@ import io
 import tempfile
 import os
 import numpy as np
+import re
 
 st.title("Tomato Monitoring System 🍅🌿")
 
@@ -127,10 +128,13 @@ with tab3:
             else:
                 st.write(f"- {class_name}: {confidence:.2f}")
 
-        major_class = disease_model.names[probs.top1].lower()
+        # Normalize top-1 class name
+        raw_class = disease_model.names[probs.top1]
+        major_class = re.sub(r'[^a-zA-Z0-9]+', '_', raw_class.strip().lower())
+
         st.subheader("Recommended Management Strategy 🌿")
 
-        if "bacterial spot" in major_class:
+        if "bacterial_spot" in major_class:
             st.write("""
 **Chemical:** Copper Oxychloride 50% WP  
 **Brands (Nepal):** Blitox, Blue Copper, Cu-50  
@@ -138,7 +142,7 @@ with tab3:
 **Note:** Spray early morning or late evening to avoid leaf burn
             """)
 
-        elif "early blight" in major_class or "late blight" in major_class:
+        elif "early_blight" in major_class or "late_blight" in major_class:
             st.write("""
 **Protective Chemical:** Mancozeb 75% WP  
 **Brands:** Dithane M-45, Indofil M-45  
@@ -147,7 +151,7 @@ with tab3:
 **Dosage:** 2 g per liter of water
             """)
 
-        elif "leaf mold" in major_class:
+        elif "leaf_mold" in major_class:
             st.write("""
 **Chemical:** Carbendazim 50% WP  
 **Brands:** Bavistin, Beve-50  
@@ -155,7 +159,7 @@ with tab3:
 **Alternative:** Chlorothalonil (Kavach)
             """)
 
-        elif "powdery mildew" in major_class:
+        elif "powdery_mildew" in major_class:
             st.write("""
 **Chemical:** Wettable Sulphur 80% WP or Hexaconazole 5% EC  
 **Brands:** Sulfex, Contaf, Sitara  
@@ -169,7 +173,7 @@ with tab3:
 **Dosage:** 2 g per liter of water
             """)
 
-        elif "spider mite" in major_class:
+        elif "spider_mites" in major_class or "two_spotted_spider_mite" in major_class:
             st.write("""
 **Chemical:** Abamectin 1.8% or 1.9% EC  
 **Brands:** Vertimec, Abacin, V-mectin  
@@ -177,14 +181,14 @@ with tab3:
 **Note:** Spray underside of leaves where mites hide
             """)
 
-        elif "target spot" in major_class:
+        elif "target_spot" in major_class:
             st.write("""
 **Chemical:** Azoxystrobin 23% SC or Mancozeb  
 **Brands:** Amistar, Mirador  
 **Dosage:** 1 ml per liter of water
             """)
 
-        elif "yellow leaf curl" in major_class or "tylcv" in major_class:
+        elif "tomato_yellow_leaf_curl_virus" in major_class or "tylcv" in major_class:
             st.write("""
 **Disease Type:** Viral (TYLCV) — no chemical cure  
 **Vector Control:** Whitefly (Bemisia tabaci)  
