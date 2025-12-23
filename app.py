@@ -125,26 +125,8 @@ with tab3:
         for idx in top3_indices:
             class_name = disease_model.names[idx]
             confidence = probs.data[idx]
-            st.write(f"- {class_name}: {confidence:.2f}")
-
-        # Highlight the major disease (top-1)
-        major_idx = probs.top1
-        major_class = disease_model.names[major_idx]
-        major_conf = probs.top1conf
-
-        # Convert PIL to OpenCV
-        cv_img = cv2.cvtColor(np.array(disease_img), cv2.COLOR_RGB2BGR)
-
-        # Draw a red circle in the center of the image
-        h, w, _ = cv_img.shape
-        center = (w // 2, h // 2)
-        radius = min(h, w) // 4
-        cv2.circle(cv_img, center, radius, (0, 0, 255), 5)
-
-        # Put disease label text
-        cv2.putText(cv_img, f"{major_class} ({major_conf:.2f})",
-                    (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
-
-        # Convert back to RGB for Streamlit
-        result_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
-        st.image(result_img, caption=f"Major Disease Highlighted: {major_class}", use_column_width=True)
+            # Highlight the major disease (top-1) in red text
+            if idx == probs.top1:
+                st.markdown(f"- 🔴 **{class_name}** → Confidence: `{confidence:.2f}`")
+            else:
+                st.write(f"- {class_name}: {confidence:.2f}")
