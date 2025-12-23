@@ -10,16 +10,17 @@ import os
 st.title("Tomato Monitoring System 🍅🌿")
 
 # ---------------- Load Models ----------------
-fruit_model_path = os.path.join(os.path.dirname(__file__), "fruit.pt")
-fruit_model = YOLO(fruit_model_path)
-
-leaf_model_path = os.path.join(os.path.dirname(__file__), "yolov8n-cls.pt")
-leaf_model = YOLO(leaf_model_path)
+fruit_model = YOLO(os.path.join(os.path.dirname(__file__), "fruit.pt"))
+disease_model = YOLO(os.path.join(os.path.dirname(__file__), "leafdisease.pt"))
 
 # ---------------- Tabs ----------------
-tab1, tab2, tab3 = st.tabs(["🖼️ Fruit Image Mode", "📹 Fruit Video Mode", "🌿 Leaf Classifier"])
+tab1, tab2, tab3 = st.tabs([
+    "🖼️ Fruit Image Detector", 
+    "📹 Fruit Video Detector", 
+    "🦠 Leaf Disease Classifier"
+])
 
-# ---------------- FRUIT IMAGE MODE ----------------
+# ---------------- FRUIT IMAGE DETECTOR ----------------
 with tab1:
     uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
     if uploaded:
@@ -59,7 +60,7 @@ with tab1:
         st.subheader("Tomato Counts by Stage")
         st.write(counts)
 
-# ---------------- FRUIT VIDEO MODE ----------------
+# ---------------- FRUIT VIDEO DETECTOR ----------------
 with tab2:
     uploaded_video = st.file_uploader("Upload a tomato video", type=["mp4", "avi", "mov"])
     if uploaded_video:
@@ -102,29 +103,29 @@ with tab2:
                 mime="video/mp4"
             )
 
-# ---------------- LEAF CLASSIFIER ----------------
+# ---------------- LEAF DISEASE CLASSIFIER ----------------
 with tab3:
-    leaf_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
-    if leaf_file:
-        if leaf_file.type == "image/heic":
-            heif_file = pillow_heif.read_heif(leaf_file.read())
-            leaf_img = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
+    disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
+    if disease_file:
+        if disease_file.type == "image/heic":
+            heif_file = pillow_heif.read_heif(disease_file.read())
+            disease_img = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
         else:
-            leaf_img = Image.open(leaf_file)
+            disease_img = Image.open(disease_file)
 
-        st.image(leaf_img, caption="Uploaded Leaf Image", use_column_width=True)
+        st.image(disease_img, caption="Uploaded Leaf Image", use_column_width=True)
 
-        leaf_results = leaf_model(leaf_img)
-        probs = leaf_results[0].probs  # probability distribution over classes
+        disease_results = disease_model(disease_img)
+        probs = disease_results[0].probs
 
         # Top-3 predictions
         top3_indices = probs.top5[:3]
-        st.subheader("Top-3 Predictions 🌿")
+        st.subheader("Top-3 Disease Predictions 🦠")
         for idx in top3_indices:
-            class_name = leaf_model.names[idx]
+            class_name = disease_model.names[idx]
             confidence = probs.data[idx]
             st.write(f"{class_name}: {confidence:.2f}")
 
-        # Optional: show bar chart of top-3
-        top3_dict = {leaf_model.names[idx]: float(probs.data[idx]) for idx in top3_indices}
+        # Optional bar chart
+        top3_dict = {disease_model.names[idx]: float(probs.data[idx]) for idx in top3_indices}
         st.bar_chart(top3_dict)
