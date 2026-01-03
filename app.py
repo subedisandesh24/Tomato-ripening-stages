@@ -15,13 +15,13 @@ st.title("Tomato Monitoring System 🍅🌿")
 fruit_model = YOLO("fruit.pt")
 disease_model = YOLO("leafdisease.pt")
 
-# Define tabs
 tab1, tab2, tab3, tab4 = st.tabs([
     "🖼️ Fruit Image Detector",
     "📹 Fruit Video Detector",
     "🦠 Leaf Disease Classifier",
     "⚖️ Tomato Weight Estimator"
 ])
+
 # Fruit Image Detector
 with tab1:
     uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
