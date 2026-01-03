@@ -17,22 +17,18 @@ except Exception:
 st.set_page_config(page_title="Tomato Monitoring System", layout="wide")
 st.title("Tomato Monitoring System 🍅🧑‍🌾")
 
+# -----------------------------
 # Load models
+# -----------------------------
 fruit_model = YOLO("fruit.pt")
 disease_model = YOLO("leafdisease.pt")
 
 # -----------------------------
-# Top row tabs (1 & 2)
+# Define all 4 tabs together
 # -----------------------------
-tab1, tab2 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "🖼️ Fruit Image Detector",
-    "📹 Fruit Video Detector"
-])
-
-# -----------------------------
-# Bottom row tabs (3 & 4)
-# -----------------------------
-tab3, tab4 = st.tabs([
+    "📹 Fruit Video Detector",
     "🦠 Leaf Disease Classifier",
     "⚖️ Tomato Weight Estimator"
 ])
@@ -128,7 +124,7 @@ with tab2:
                 file_name="tomato_detected.mp4",
                 mime="video/mp4"
             )
-# -----------------------------
+
 # Tab 3: Leaf Disease Classifier
 # -----------------------------
 with tab3:
@@ -242,7 +238,7 @@ with tab3:
 - Control insect vectors (aphids, thrips) that may aid transmission  
 **Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
             """)
-# -----------------------------
+
 # Tab 4: Tomato Weight Estimator
 # -----------------------------
 with tab4:
@@ -292,5 +288,9 @@ with tab4:
                 V_m3 = V_cm3 * 1e-6
                 M_kg = V_m3 * 900
                 M_g = M_kg * 1000
+
+                if "red" in label.lower():
+                    stage_counts["Red"] += 1
+                    stage_weights["Red"] += M_g
 
 
