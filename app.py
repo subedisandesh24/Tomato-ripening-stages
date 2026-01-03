@@ -32,7 +32,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "🦠 Leaf Disease Classifier",
     "⚖️ Tomato Weight Estimator"
 ])
-
 # -----------------------------
 # Tab 1: Fruit Image Detector
 # -----------------------------
@@ -124,7 +123,7 @@ with tab2:
                 file_name="tomato_detected.mp4",
                 mime="video/mp4"
             )
-
+# -----------------------------
 # Tab 3: Leaf Disease Classifier
 # -----------------------------
 with tab3:
@@ -238,7 +237,7 @@ with tab3:
 - Control insect vectors (aphids, thrips) that may aid transmission  
 **Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
             """)
-
+# -----------------------------
 # Tab 4: Tomato Weight Estimator
 # -----------------------------
 with tab4:
