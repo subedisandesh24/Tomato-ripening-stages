@@ -12,6 +12,7 @@ import re
 st.set_page_config(page_title="Tomato Monitoring System", layout="wide")
 st.title("Tomato Monitoring System 🍅🌿")
 
+
 # Load models
 fruit_model = YOLO("fruit.pt")
 disease_model = YOLO("leafdisease.pt")
