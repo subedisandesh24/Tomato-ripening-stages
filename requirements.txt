@@ -1,9 +1,12 @@
-streamlit
-ultralytics
-pillow
-pillow-heif
-opencv-python-headless
+streamlit==1.29.0
+ultralytics==8.2.0
+torch==2.0.1
+opencv-python-headless==4.10.0.84
+pillow==10.2.0
+pillow-heif==0.16.0
 numpy
+streamlit-drawable-canvas==0.9.3
+
 
 
 
