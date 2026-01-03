@@ -1,3 +1,4 @@
+import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
 import pillow_heif
@@ -8,6 +9,7 @@ import os
 import numpy as np
 import re
 
+st.set_page_config(page_title="Tomato Monitoring System", layout="wide")
 st.title("Tomato Monitoring System 🍅🌿")
 
 # Load models
@@ -21,7 +23,9 @@ tab1, tab2, tab3 = st.tabs([
     "🦠 Leaf Disease Classifier"
 ])
 
-# Fruit Image Detector
+# -----------------------------
+# Tab 1: Fruit Image Detector
+# -----------------------------
 with tab1:
     uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
     if uploaded:
@@ -33,7 +37,7 @@ with tab1:
 
         st.image(img, caption="Uploaded Image", use_column_width=True)
 
-        results = fruit_model(img)
+        results = fruit_model(np.array(img))
         result_img = results[0].plot()
         result_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
 
@@ -42,6 +46,7 @@ with tab1:
         result_pil = Image.fromarray(result_img)
         buf = io.BytesIO()
         result_pil.save(buf, format="PNG")
+        buf.seek(0)
         st.download_button("Download Detection Result", buf.getvalue(),
                            file_name="tomato_detection.png", mime="image/png")
 
@@ -59,7 +64,9 @@ with tab1:
         st.subheader("Tomato Counts by Stage")
         st.write(counts)
 
-# Fruit Video Detector
+# -----------------------------
+# Tab 2: Fruit Video Detector
+# -----------------------------
 with tab2:
     uploaded_video = st.file_uploader("Upload a tomato video", type=["mp4", "avi", "mov"])
     if uploaded_video:
@@ -74,7 +81,7 @@ with tab2:
         fps = cap.get(cv2.CAP_PROP_FPS)
 
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        out = cv2.VideoWriter(output_path, fourcc, fps if fps > 0 else 25, (width, height))
 
         stframe = st.empty()
 
@@ -102,7 +109,9 @@ with tab2:
                 mime="video/mp4"
             )
 
-# Leaf Disease Classifier
+# -----------------------------
+# Tab 3: Leaf Disease Classifier
+# -----------------------------
 with tab3:
     disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
     if disease_file:
@@ -114,14 +123,14 @@ with tab3:
 
         st.image(disease_img, caption="Uploaded Leaf Image", use_column_width=True)
 
-        disease_results = disease_model(disease_img)
+        disease_results = disease_model(np.array(disease_img))
         probs = disease_results[0].probs
 
         top3_indices = probs.top5[:3]
         st.subheader("Top-3 Disease Predictions 🌿")
         for idx in top3_indices:
             class_name = disease_model.names[idx]
-            confidence = probs.data[idx]
+            confidence = float(probs.data[idx])
             if idx == probs.top1:
                 st.markdown(f"- 🔴 **{class_name}** → Confidence: `{confidence:.2f}`")
             else:
