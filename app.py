@@ -209,45 +209,37 @@ with tab3:
 **Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
             """)
 
-# -----------------------------
-# Tab 4: Tomato Weight Estimator
-# -----------------------------
 with tab4:
     uploaded_weight_img = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
     if uploaded_weight_img:
-        # Read image (supports HEIC)
-        try:
-            if uploaded_weight_img.type == "image/heic":
-                heif_file = pillow_heif.read_heif(uploaded_weight_img.read())
-                img = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
-            else:
-                img = Image.open(uploaded_weight_img)
-        except Exception as e:
-            st.error(f"Failed to read image: {e}")
-            st.stop()
+        # Read image
+        if uploaded_weight_img.type == "image/heic":
+            heif_file = pillow_heif.read_heif(uploaded_weight_img.read())
+            img = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
+        else:
+            img = Image.open(uploaded_weight_img)
 
         st.image(img, caption="Uploaded Image", use_column_width=True)
         img_np = np.array(img)
 
-        st.subheader("Calibration: pixel-to-cm")
-        st.write("Provide calibration via a drawn line (if enabled) or enter values manually.")
+        st.subheader("Calibration: Pixel-to-CM")
+        st.write("Use either method below to set the conversion factor.")
 
-        # Method A: On-image calibration (if streamlit-drawable-canvas is installed)
+        # Method A: Canvas drawing
         cm_per_pixel_A = 0.0
-        if 'CANVAS_AVAILABLE' in globals() and CANVAS_AVAILABLE:
-            st.markdown("**Method A (recommended): Draw a line between two known points and enter the real distance (cm).**")
+        if CANVAS_AVAILABLE:
             canvas = st_canvas(
                 fill_color="rgba(255, 165, 0, 0.3)",
                 stroke_width=2,
                 stroke_color="#00AAFF",
-                background_image=img if isinstance(img, Image.Image) else Image.fromarray(img_np),
+                background_image=img,
                 update_streamlit=True,
                 height=img.height,
                 width=img.width,
                 drawing_mode="line",
                 key="weight_calib_canvas"
             )
-            real_distance_cm_A = st.number_input("Actual distance (cm) for the drawn line", min_value=0.1, value=10.0)
+            real_distance_cm_A = st.number_input("Actual distance (cm) for drawn line", min_value=0.1, value=10.0)
             if canvas and canvas.json_data and canvas.json_data.get("objects"):
                 last_obj = canvas.json_data["objects"][-1]
                 if last_obj.get("type") == "line":
@@ -256,121 +248,83 @@ with tab4:
                     pixel_distance_A = float(np.hypot(x2 - x1, y2 - y1))
                     if pixel_distance_A > 0:
                         cm_per_pixel_A = real_distance_cm_A / pixel_distance_A
-                        st.success(f"Calibration from canvas: {cm_per_pixel_A:.4f} cm/pixel")
-        else:
-            st.info("Install 'streamlit-drawable-canvas' to enable on-image calibration. Using manual input instead.")
+                        st.success(f"Canvas calibration: {cm_per_pixel_A:.4f} cm/pixel")
 
-        # Method B: Manual calibration
-        st.markdown("**Method B: Enter pixel distance and real-world cm manually.**")
+        # Method B: Manual input
         pixel_distance_B = st.number_input("Pixel distance between two points", min_value=1.0, value=100.0)
         real_distance_cm_B = st.number_input("Actual distance (cm)", min_value=0.1, value=10.0)
         cm_per_pixel_B = real_distance_cm_B / pixel_distance_B if pixel_distance_B > 0 else 0.0
 
-        # Prefer Method A if valid
+        # Final conversion factor
         cm_per_pixel = cm_per_pixel_A if cm_per_pixel_A > 0 else cm_per_pixel_B
         if cm_per_pixel <= 0:
-            st.warning("Please provide a valid calibration (draw a line or enter pixel distance).")
+            st.warning("Please provide a valid calibration.")
             st.stop()
 
         # Run detection
         results = fruit_model(img_np)
-
-        # Prepare annotated image
         annotated = results[0].plot()
         annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
 
-        # Accumulators
         stage_counts = {"Red": 0, "Turning": 0, "Green": 0}
         stage_weights = {"Red": 0.0, "Turning": 0.0, "Green": 0.0}
 
-        # Constants
-        TOMATO_DENSITY_KG_M3 = 900.0  # density
-        SPHERE_THRESHOLD = 0.1        # tolerance for W ~ L
-
-        # Compute per-fruit weights and annotate
         for box in results[0].boxes:
             cls = int(box.cls[0])
-            label = fruit_model.names[cls]
-            low = label.lower()
-
-            # Bounding box
+            label = fruit_model.names[cls].lower()
             x1, y1, x2, y2 = box.xyxy[0].tolist()
-            W_px = x2 - x1  # width (horizontal)
-            L_px = y2 - y1  # length (vertical)
-
-            # Convert to cm
+            W_px = x2 - x1
+            L_px = y2 - y1
             W = W_px * cm_per_pixel
             L = L_px * cm_per_pixel
 
-            # Volume (cm^3)
-            if abs(W - L) < SPHERE_THRESHOLD * max(W, L):
-                # Spherical approximation
+            if abs(W - L) < 0.1 * max(W, L):
                 r = W / 2
                 V_cm3 = (4/3) * np.pi * (r**3)
             else:
-                # Ellipsoidal approximation
                 V_cm3 = (4/3) * np.pi * (L/2) * (W/2)**2
 
-            # Mass (grams)
             V_m3 = V_cm3 * 1e-6
-            M_kg = V_m3 * TOMATO_DENSITY_KG_M3
-            M_g = M_kg * 1000.0
+            M_g = V_m3 * 900 * 1000
 
-            # Stage classification
-            stage_label = None
-            if "red" in low:
-                stage_label = "Red"
-            elif "turning" in low:
-                stage_label = "Turning"
-            elif "green" in low:
-                stage_label = "Green"
+            if "red" in label:
+                stage_counts["Red"] += 1
+                stage_weights["Red"] += M_g
+            elif "turning" in label:
+                stage_counts["Turning"] += 1
+                stage_weights["Turning"] += M_g
+            elif "green" in label:
+                stage_counts["Green"] += 1
+                stage_weights["Green"] += M_g
 
-            if stage_label:
-                stage_counts[stage_label] += 1
-                stage_weights[stage_label] += M_g
+            cv2.putText(annotated, f"{M_g:.1f} g", (int(x1), max(int(y1)-10, 0)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
-            # Annotate per-fruit weight on image
-            cv2.putText(
-                annotated, f"{M_g:.1f} g",
-                (int(x1), max(int(y1) - 10, 0)),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2
-            )
+        st.image(annotated, caption="Detections with Estimated Mass", use_column_width=True)
 
-        # Show annotated image
-        st.image(annotated, caption="Detections with estimated mass", use_column_width=True)
-
-        # Download annotated image
         result_pil = Image.fromarray(annotated)
         buf = io.BytesIO()
         result_pil.save(buf, format="PNG")
         buf.seek(0)
-        st.download_button(
-            "Download annotated image",
-            buf.getvalue(),
-            file_name="tomato_mass_estimation.png",
-            mime="image/png"
-        )
+        st.download_button("Download Annotated Image", buf.getvalue(),
+                           file_name="tomato_mass_estimation.png", mime="image/png")
 
-        # Totals
         total_count = sum(stage_counts.values())
         total_weight = sum(stage_weights.values())
 
-        # Sidebar summary (counts)
-        st.sidebar.subheader("Detected tomatoes (counts)")
+        st.sidebar.subheader("Detected Tomatoes")
         st.sidebar.metric("Red", stage_counts["Red"])
         st.sidebar.metric("Turning", stage_counts["Turning"])
         st.sidebar.metric("Green", stage_counts["Green"])
-        st.sidebar.metric("All stages", total_count)
+        st.sidebar.metric("All Stages", total_count)
 
-        # Sidebar summary (weights)
-        st.sidebar.subheader("Total weights (g)")
+        st.sidebar.subheader("Total Weights (g)")
         st.sidebar.metric("Red", f"{stage_weights['Red']:.1f}")
         st.sidebar.metric("Turning", f"{stage_weights['Turning']:.1f}")
         st.sidebar.metric("Green", f"{stage_weights['Green']:.1f}")
-        st.sidebar.metric("All stages", f"{total_weight:.1f}")
+        st.sidebar.metric("All Stages", f"{total_weight:.1f}")
 
-        # Main area table summary
-        st.subheader("Counts and total weights by stage")
+        st.subheader("Summary Table")
         st.table({
             "Stage": ["Red", "Turning", "Green", "All Stages"],
             "Count": [stage_counts["Red"], stage_counts["Turning"], stage_counts["Green"], total_count],
@@ -381,4 +335,3 @@ with tab4:
                 f"{total_weight:.1f}"
             ]
         })
-
