@@ -5,17 +5,13 @@ import pillow_heif
 import cv2
 import io
 import tempfile
+import os
 import numpy as np
 import re
 
-try:
-    from streamlit_drawable_canvas import st_canvas
-    CANVAS_AVAILABLE = True
-except Exception:
-    CANVAS_AVAILABLE = False
-
 st.set_page_config(page_title="Tomato Monitoring System", layout="wide")
-st.title("Tomato Monitoring System 🍅🧑‍🌾")
+st.title("Tomato Monitoring System 🍅🌿")
+
 
 # -----------------------------
 # Load models
