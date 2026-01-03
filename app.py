@@ -9,7 +9,7 @@ import os
 import numpy as np
 import re
 
-st.title("Tomato Monitoring System 🍅🌿")
+st.title("Tomato Monitoring System ")
 
 # Load models
 fruit_model = YOLO("fruit.pt")
