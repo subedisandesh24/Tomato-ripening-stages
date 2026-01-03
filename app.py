@@ -1,3 +1,4 @@
+import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
 import pillow_heif
@@ -8,6 +9,7 @@ import os
 import numpy as np
 import re
 
+st.set_page_config(page_title="Tomato Monitoring System", layout="wide")
 st.title("Tomato Monitoring System 🍅🌿")
 
 # Load models
