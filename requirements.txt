@@ -1,9 +1,10 @@
-streamlit>=1.31
-ultralytics>=8.0.196
-pillow>=10.0.0
-pillow-heif>=0.13.1
-opencv-python-headless>=4.9.0.80
-numpy>=1.26.0
+streamlit==1.29.0
+ultralytics==8.2.0
+torch==2.0.1
+opencv-python-headless==4.10.0.84
+pillow==10.2.0
+pillow-heif==0.16.0
+numpy
 
 
 
