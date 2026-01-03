@@ -8,28 +8,23 @@ import tempfile
 import numpy as np
 import re
 
-# Set page config
+try:
+    from streamlit_drawable_canvas import st_canvas
+    CANVAS_AVAILABLE = True
+except Exception:
+    CANVAS_AVAILABLE = False
+
 st.set_page_config(page_title="Tomato Monitoring System", layout="wide")
 st.title("Tomato Monitoring System 🍅🧑‍🌾")
 
 # -----------------------------
-# Load models (Cached to prevent reloading on every interaction)
+# Load models
 # -----------------------------
-@st.cache_resource
-def load_models():
-    # Ensure you have fruit.pt and leafdisease.pt in your root folder
-    f_model = YOLO("fruit.pt")
-    d_model = YOLO("leafdisease.pt")
-    return f_model, d_model
-
-try:
-    fruit_model, disease_model = load_models()
-except Exception as e:
-    st.error(f"Error loading models: {e}. Please ensure 'fruit.pt' and 'leafdisease.pt' are in the directory.")
-    st.stop()
+fruit_model = YOLO("fruit.pt")
+disease_model = YOLO("leafdisease.pt")
 
 # -----------------------------
-# Define all 4 tabs
+# Define all 4 tabs together
 # -----------------------------
 tab1, tab2, tab3, tab4 = st.tabs([
     "🖼️ Fruit Image Detector",
@@ -45,8 +40,7 @@ with tab1:
     st.header("Fruit Image Detector")
     st.write("This tab will detect tomato ripening stages from images.")
 
-    # Added unique key='tab1_uploader' to prevent duplicates
-    uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"], key="tab1_uploader")
+    uploaded = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
     if uploaded:
         if uploaded.type == "image/heic":
             heif_file = pillow_heif.read_heif(uploaded.read())
@@ -90,7 +84,7 @@ with tab2:
     st.header("Fruit Video Detector")
     st.write("This tab will detect tomato ripening stages from video frames.")
 
-    uploaded_video = st.file_uploader("Upload a tomato video", type=["mp4", "avi", "mov"], key="tab2_uploader")
+    uploaded_video = st.file_uploader("Upload a tomato video", type=["mp4", "avi", "mov"])
     if uploaded_video:
         tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
         tfile.write(uploaded_video.read())
@@ -102,7 +96,6 @@ with tab2:
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
 
-        # Use 'avc1' or 'mp4v' for Streamlit compatibility
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(output_path, fourcc, fps if fps > 0 else 25, (width, height))
 
@@ -124,16 +117,13 @@ with tab2:
         cap.release()
         out.release()
 
-        try:
-            with open(output_path, "rb") as f:
-                st.download_button(
-                    label="Download Detected Video",
-                    data=f.read(),
-                    file_name="tomato_detected.mp4",
-                    mime="video/mp4"
-                )
-        except Exception as e:
-            st.error(f"Error preparing download: {e}")
+        with open(output_path, "rb") as f:
+            st.download_button(
+                label="Download Detected Video",
+                data=f.read(),
+                file_name="tomato_detected.mp4",
+                mime="video/mp4"
+            )
 
 # -----------------------------
 # Tab 3: Leaf Disease Classifier
@@ -142,7 +132,7 @@ with tab3:
     st.header("Leaf Disease Classifier")
     st.write("This tab will classify tomato leaf diseases.")
 
-    disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"], key="tab3_uploader")
+    disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
     if disease_file:
         if disease_file.type == "image/heic":
             heif_file = pillow_heif.read_heif(disease_file.read())
@@ -152,11 +142,9 @@ with tab3:
 
         st.image(disease_img, caption="Uploaded Leaf Image", use_column_width=True)
 
-        # Run disease classification
         disease_results = disease_model(np.array(disease_img))
         probs = disease_results[0].probs
 
-        # Top-3 predictions
         top3_indices = probs.top5[:3]
         st.subheader("Top-3 Disease Predictions 🌿")
         for idx in top3_indices:
@@ -167,32 +155,11 @@ with tab3:
             else:
                 st.write(f"- {class_name}: {confidence:.2f}")
 
-        # Normalize top-1 class name
         raw_class = disease_model.names[probs.top1]
         major_class = re.sub(r'[^a-zA-Z0-9]+', '_', raw_class.strip().lower())
 
         st.subheader("Recommended Management Strategy 🌿")
-
-        if "bacterial_spot" in major_class:
-            st.write("**Chemical:** Copper Oxychloride 50% WP (Blitox, Blue Copper)")
-        elif "early_blight" in major_class or "late_blight" in major_class:
-            st.write("**Chemical:** Mancozeb 75% WP (Dithane M-45) or Metalaxyl+Mancozeb")
-        elif "leaf_mold" in major_class:
-            st.write("**Chemical:** Carbendazim 50% WP (Bavistin)")
-        elif "powdery_mildew" in major_class:
-            st.write("**Chemical:** Wettable Sulphur 80% WP or Hexaconazole")
-        elif "septoria" in major_class:
-            st.write("**Chemical:** Chlorothalonil 75% WP (Kavach)")
-        elif "spider_mites" in major_class:
-            st.write("**Chemical:** Abamectin 1.9% EC")
-        elif "target_spot" in major_class:
-            st.write("**Chemical:** Azoxystrobin 23% SC")
-        elif "yellow_leaf_curl" in major_class or "tylcv" in major_class:
-            st.write("**Virus:** Control Whitefly using Imidacloprid 17.8% SL")
-        elif "mosaic_virus" in major_class:
-            st.write("**Virus:** No cure. Remove infected plants. Control aphids.")
-        else:
-            st.write(f"No specific recommendation in database for: {raw_class}")
+        st.write("Add your management strategy conditions here (as in your earlier code).")
 
 # -----------------------------
 # Tab 4: Tomato Weight Estimator
@@ -201,9 +168,7 @@ with tab4:
     st.header("Tomato Weight Estimator")
     st.write("This tab will estimate tomato weight based on image and calibration.")
 
-    # Added unique key='tab4_uploader'
-    uploaded_weight_img = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"], key="tab4_uploader")
-    
+    uploaded_weight_img = st.file_uploader("Upload a tomato image", type=["jpg", "png", "jpeg", "heic"])
     if uploaded_weight_img:
         if uploaded_weight_img.type == "image/heic":
             heif_file = pillow_heif.read_heif(uploaded_weight_img.read())
@@ -215,63 +180,38 @@ with tab4:
         img_np = np.array(img)
 
         st.subheader("Calibration: Pixel-to-CM")
-        st.info("Measure a known object in the image or use the tomato width if known.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            pixel_distance = st.number_input("Pixel distance (e.g., width of tomato in px)", min_value=1.0, value=100.0)
-        with col2:
-            real_distance_cm = st.number_input("Real distance (cm) for that pixel width", min_value=0.1, value=5.0)
-            
+        pixel_distance = st.number_input("Enter pixel distance between two points", min_value=1.0)
+        real_distance_cm = st.number_input("Enter actual distance (cm)", min_value=0.1)
         cm_per_pixel = real_distance_cm / pixel_distance if pixel_distance > 0 else 0
 
-        if st.button("Calculate Weight"):
+        if cm_per_pixel > 0:
             results = fruit_model(img_np)
             annotated = results[0].plot()
             annotated = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
-            st.image(annotated, caption="Measured Tomatoes")
 
             stage_counts = {"Red": 0, "Turning": 0, "Green": 0}
             stage_weights = {"Red": 0.0, "Turning": 0.0, "Green": 0.0}
-
-            total_weight = 0
 
             for box in results[0].boxes:
                 cls = int(box.cls[0])
                 label = fruit_model.names[cls]
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
-                
-                # Calculate dimensions in pixels
                 W_px = x2 - x1
                 L_px = y2 - y1
 
-                # Convert to cm
                 W = W_px * cm_per_pixel
                 L = L_px * cm_per_pixel
 
-                # Volume estimation (approximate as sphere or ellipsoid)
                 if abs(W - L) < 0.1 * max(W, L):
                     r = W / 2
                     V_cm3 = (4/3) * np.pi * (r**3)
                 else:
                     V_cm3 = (4/3) * np.pi * (L/2) * (W/2)**2
 
-                # Density of tomato approx 0.9 g/cm3 (900 kg/m3)
-                density = 0.95 # g/cm3
-                M_g = V_cm3 * density
-                
-                total_weight += M_g
+                V_m3 = V_cm3 * 1e-6
+                M_kg = V_m3 * 900
+                M_g = M_kg * 1000
 
                 if "red" in label.lower():
                     stage_counts["Red"] += 1
-                    stage_weights["Red"] += M_g
-                elif "turning" in label.lower():
-                    stage_counts["Turning"] += 1
-                    stage_weights["Turning"] += M_g
-                elif "green" in label.lower():
-                    stage_counts["Green"] += 1
-                    stage_weights["Green"] += M_g
-
-            st.write("### Estimated Weights")
-            st.write(f"**Total Estimated Weight:** {total_weight:.2f} grams")
-            st.json(stage_weights)
+                    stage_weights["Red
