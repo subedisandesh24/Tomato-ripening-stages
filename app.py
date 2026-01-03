@@ -1,5 +1,11 @@
-
 import streamlit as st
+
+try:
+    import cv2
+    st.write("✅ OpenCV imported successfully:", cv2.__version__)
+except Exception as e:
+    st.error(f"❌ OpenCV import failed: {e}")
+
 from ultralytics import YOLO
 from PIL import Image
 import pillow_heif
