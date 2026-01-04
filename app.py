@@ -104,6 +104,7 @@ with tab2:
             )
 
 # ---------------- TAB 3: Classification ----------------
+# Leaf Disease Classifier
 with tab3:
     disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
     if disease_file:
@@ -115,11 +116,14 @@ with tab3:
 
         st.image(disease_img, caption="Uploaded Leaf Image", use_column_width=True)
 
-        # Convert PIL → NumPy for classification
+        # ✅ Convert PIL → NumPy for classification
         disease_np = np.array(disease_img)
+
+        # Run classification
         disease_results = disease_model(disease_np)
         probs = disease_results[0].probs
 
+        # Show top-3 predictions
         top3_indices = probs.top5[:3]
         st.subheader("Top-3 Disease Predictions 🌿")
         for idx in top3_indices:
@@ -130,7 +134,7 @@ with tab3:
             else:
                 st.write(f"- {class_name}: {confidence:.2f}")
 
-        # Normalize top-1 class name
+        # Normalize top-1 class name for strategy mapping
         raw_class = disease_model.names[probs.top1]
         major_class = re.sub(r'[^a-zA-Z0-9]+', '_', raw_class.strip().lower())
 
