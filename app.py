@@ -1,11 +1,9 @@
-# app.py
 import streamlit as st
 from ultralytics import YOLO
 import cv2
 import numpy as np
 from PIL import Image
 import tempfile
-import os
 
 # ----------------------------
 # Load YOLO models
@@ -159,6 +157,8 @@ with tab4:
         weights = []
 
         annotated = results[0].orig_img.copy()
+        stage_weights = {"Red":0, "Turning":0, "Green":0}
+
         for box in results[0].boxes:
             if box.conf < 0.6:
                 continue
@@ -171,26 +171,9 @@ with tab4:
             width_cm = width_px * px_to_cm
             weight = estimate_weight(length_cm, width_cm)
             weights.append(weight)
+            if label in stage_weights:
+                stage_weights[label] += weight
 
             color = (0, 0, 255) if label == "Red" else (0, 255, 0) if label == "Green" else (0, 255, 255)
             cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 3)
-            cv2.putText(annotated, f"{label} {weight:.3f} kg", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-
-        st.image(annotated, caption="Annotated with weights", use_column_width=True)
-
-        # Download option
-        tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        cv2.imwrite(tmpfile.name, cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR))
-        with open(tmpfile.name, "rb") as f:
-            st.download_button("Download Annotated Image", f, file_name="weights.jpg")
-
-              # Table summary
-        st.subheader("Yield Summary")
-        total_weight = sum(weights)
-        summary = {
-            "Stage": list(counts.keys()) + ["Total"],
-            "Count": list(counts.values()) + [total],
-            "Weight (kg)": [round(w, 3) for w in weights] + [round(total_weight, 3)]
-        }
-        st.table(summary)
-
+            cv2.putText(annotated, f"{label} {weight:.3f} kg", (x1, y1 - 10), cv2.FONT
