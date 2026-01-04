@@ -46,10 +46,20 @@ with tab1:
         st.download_button("Download Detection Result", buf.getvalue(),
                            file_name="tomato_detection.png", mime="image/png")
 
+        # Confidence threshold
+        conf_threshold = 0.60
         counts = {"Red": 0, "Green": 0, "Turning": 0}
+        detected_list = []  # store detections with confidence
+
         for box in results[0].boxes:
+            conf = float(box.conf[0])
+            if conf < conf_threshold:
+                continue  # skip detections below 0.60
+
             cls = int(box.cls[0])
             label = fruit_model.names[cls]
+
+            # Count tomatoes by stage
             if "red" in label.lower():
                 counts["Red"] += 1
             elif "green" in label.lower():
@@ -57,8 +67,15 @@ with tab1:
             elif "turning" in label.lower():
                 counts["Turning"] += 1
 
-        st.subheader("Tomato Counts by Stage")
+            # Save detection info with confidence
+            detected_list.append(f"{label} ({conf:.2f})")
+
+        st.subheader(f"Tomato Counts by Stage (conf ≥ {conf_threshold})")
         st.write(counts)
+
+        if detected_list:
+            st.subheader("Detections with Confidence")
+            st.write(detected_list)
 
 # Fruit Video Detector
 with tab2:
