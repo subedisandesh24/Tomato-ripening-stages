@@ -1,6 +1,6 @@
 import streamlit as st
 from ultralytics import YOLO
-from PIL import Image, ImageDraw  # <--- FIXED: Added ImageDraw here
+from PIL import Image, ImageDraw
 import numpy as np
 import pandas as pd
 import tempfile
@@ -45,7 +45,6 @@ st.markdown('<p class="main-title">Advance Tomato Monitoring System</p>', unsafe
 # --- Load Models ---
 @st.cache_resource
 def load_models():
-    # Make sure fruit.pt and leafdisease.pt are in your GitHub folder
     det_model = YOLO("fruit.pt") 
     cls_model = YOLO("leafdisease.pt")
     return det_model, cls_model
@@ -80,7 +79,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ==========================================
-# TAB 1: FRUIT DETECTOR (Large Fonts)
+# TAB 1: FRUIT DETECTOR
 # ==========================================
 with tab1:
     st.subheader("Fruit Detection")
@@ -93,12 +92,10 @@ with tab1:
             st.image(original_pil, caption="Original Image", use_container_width=True)
         
         if col2.button("🔍 Detect Tomatoes", type="primary"):
-            # Convert PIL to OpenCV (numpy) for better drawing control
             img_cv = np.array(original_pil)
             img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
             
             results = det_model(img_cv, conf=0.25)
-            
             counts = {"Red": 0, "Turning": 0, "Green": 0}
             
             for box in results[0].boxes:
@@ -107,21 +104,18 @@ with tab1:
                 cls_name = det_model.names[cls_id]
                 conf = float(box.conf[0])
                 
-                # Update Counts
                 found_key = False
                 for key in counts.keys():
                     if key.lower() in cls_name.lower():
                         counts[key] += 1
                         found_key = True
                 
-                # Color & Label
                 color = get_color_bgr(cls_name)
                 label = f"{cls_name} {conf:.2f}"
                 
-                # --- DRAWING (LARGE FONTS) ---
                 cv2.rectangle(img_cv, (x1, y1), (x2, y2), color, 4)
                 
-                font_scale = 1.5 # <--- LARGE FONT
+                font_scale = 1.5 
                 thickness = 3
                 (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
                 cv2.rectangle(img_cv, (x1, y1 - h - 10), (x1 + w, y1), color, -1)
@@ -131,7 +125,6 @@ with tab1:
             
             with col2:
                 st.image(final_img, caption="Detected Tomatoes", use_container_width=True)
-                
                 final_pil = Image.fromarray(final_img)
                 buf = io.BytesIO()
                 final_pil.save(buf, format="JPEG")
@@ -170,17 +163,13 @@ with tab2:
         while cap.isOpened() and frame_cnt < max_frames:
             ret, frame = cap.read()
             if not ret: break
-            
             results = det_model(frame, conf=0.35)
-            
             for box in results[0].boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 cls_name = det_model.names[int(box.cls[0])]
                 color = get_color_bgr(cls_name)
-                
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
                 cv2.putText(frame, cls_name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
-                
             out.write(frame)
             frame_cnt += 1
             prog.progress(frame_cnt / max_frames)
@@ -192,7 +181,7 @@ with tab2:
             st.download_button("⬇️ Download Annotated Video", f.read(), file_name="annotated_video.mp4", mime="video/mp4")
 
 # ==========================================
-# TAB 3: DISEASE CLASSIFIER (Recommendations)
+# TAB 3: DISEASE CLASSIFIER
 # ==========================================
 with tab3:
     st.subheader("Leaf Disease Classification & Strategy")
@@ -206,7 +195,6 @@ with tab3:
             results = cls_model(img)
             names = results[0].names
             probs = results[0].probs
-            
             top1_idx = probs.top1
             top1_name = names[top1_idx]
             conf = probs.top1conf.item()
@@ -216,12 +204,10 @@ with tab3:
             st.write(f"**Confidence Level:** {conf:.2%}")
             
             st.markdown("#### 🛡️ Recommended Strategy")
-            
             major_class = top1_name.lower().replace(" ", "_")
             
             with st.container():
                 st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
-                
                 if "bacterial_spot" in major_class:
                     st.markdown("""
                     **Chemical:** Copper Oxychloride 50% WP  
@@ -229,7 +215,6 @@ with tab3:
                     **Dosage:** 2–3 g per liter of water  
                     **Note:** Spray early morning or late evening to avoid leaf burn
                     """)
-                
                 elif "early_blight" in major_class or "late_blight" in major_class:
                     st.markdown("""
                     **Protective Chemical:** Mancozeb 75% WP  
@@ -238,7 +223,6 @@ with tab3:
                     **Brands:** Krilaxyl, Ridomil Gold, Matco  
                     **Dosage:** 2 g per liter of water
                     """)
-                    
                 elif "leaf_mold" in major_class:
                     st.markdown("""
                     **Chemical:** Carbendazim 50% WP  
@@ -246,21 +230,18 @@ with tab3:
                     **Dosage:** 1–2 g per liter of water  
                     **Alternative:** Chlorothalonil (Kavach)
                     """)
-                    
                 elif "powdery_mildew" in major_class:
                     st.markdown("""
                     **Chemical:** Wettable Sulphur 80% WP or Hexaconazole 5% EC  
                     **Brands:** Sulfex, Contaf, Sitara  
                     **Dosage:** 2 g per liter (Sulphur) or 2 ml per liter (Hexaconazole)
                     """)
-                    
                 elif "septoria" in major_class:
                     st.markdown("""
                     **Chemical:** Chlorothalonil 75% WP  
                     **Brands:** Kavach, Ishan  
                     **Dosage:** 2 g per liter of water
                     """)
-                    
                 elif "spider_mites" in major_class or "two_spotted_spider_mite" in major_class:
                     st.markdown("""
                     **Chemical:** Abamectin 1.8% or 1.9% EC  
@@ -268,14 +249,12 @@ with tab3:
                     **Dosage:** 0.5–1 ml per liter of water  
                     **Note:** Spray underside of leaves where mites hide
                     """)
-                    
                 elif "target_spot" in major_class:
                     st.markdown("""
                     **Chemical:** Azoxystrobin 23% SC or Mancozeb  
                     **Brands:** Amistar, Mirador  
                     **Dosage:** 1 ml per liter of water
                     """)
-                    
                 elif "tomato_yellow_leaf_curl_virus" in major_class or "tylcv" in major_class:
                     st.markdown("""
                     **Disease Type:** Viral (TYLCV) — no chemical cure  
@@ -284,7 +263,6 @@ with tab3:
                     **Brands:** Confidor, Media, Pride, Manik  
                     **Dosage:** 0.5 ml (Imidacloprid) or 0.5 g (Acetamiprid) per liter of water
                     """)
-                    
                 elif "tomato_mosaic_virus" in major_class or "mosaic_virus" in major_class:
                     st.markdown("""
                     **Disease Type:** Tomato Mosaic Virus (ToMV) — viral disease, no chemical cure  
@@ -297,12 +275,11 @@ with tab3:
                     **Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
                     """)
                 else:
-                    st.write("No specific chemical recommendation available for this class yet. Please consult a local horticulturist.")
-                
+                    st.write("No specific chemical recommendation available for this class yet. Please consult a local agronomist.")
                 st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
-# TAB 4: WEIGHT ESTIMATION (Clean Table)
+# TAB 4: WEIGHT ESTIMATION
 # ==========================================
 with tab4:
     st.subheader("Weight Estimation")
@@ -346,7 +323,7 @@ with tab4:
                         st.session_state.points.append(pt)
                         st.rerun()
             else:
-                st.image(display_img, use_container_width=True)
+                st.image(display_img)
 
         if calc_btn and len(st.session_state.points) == 2:
             st.divider()
@@ -370,19 +347,16 @@ with tab4:
                 
                 if abs(w_cm - l_cm) < (0.2 * l_cm):
                     vol = (4/3) * math.pi * ((w_cm/2)**3)
-                    shape = "Sphere"
                 else:
                     vol = (4/3) * math.pi * (l_cm/2) * ((w_cm/2)**2)
-                    shape = "Ellipsoid"
                 
                 kg = (vol/1000000)*900
                 total_weight += kg
                 
-                # Table Data (Without Dimensions)
+                # Table Data (Removed Shape)
                 table_data.append({
                     "ID": i+1, 
                     "Stage": cls_name, 
-                    "Shape": shape,
                     "Weight (kg)": round(kg, 3)
                 })
                 
@@ -392,12 +366,16 @@ with tab4:
 
             final_res = cv2.cvtColor(img_res, cv2.COLOR_BGR2RGB)
             
-            st.image(final_res, caption="Weight Analysis", use_container_width=True)
+            # Image output without zooming (removed use_container_width=True)
+            st.image(final_res, caption="Weight Analysis")
             
-            st.markdown("---")
-            m1, m2 = st.columns(2)
-            m1.metric(label="Total Tomatoes", value=str(len(table_data)))
-            m2.metric(label="Total Yield", value=f"{total_weight:.3f} kg")
+            # Add TOTAL Row to Table
+            if table_data:
+                table_data.append({
+                    "ID": "TOTAL",
+                    "Stage": f"{len(table_data)} Fruits",
+                    "Weight (kg)": f"{total_weight:.3f}"
+                })
             
             st.markdown("### Detailed List")
             st.dataframe(pd.DataFrame(table_data), use_container_width=True)
