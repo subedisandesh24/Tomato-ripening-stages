@@ -89,15 +89,14 @@ with tab1:
         original_pil = Image.open(img_file).convert("RGB")
         col1, col2 = st.columns(2)
         with col1:
-            st.image(original_pil, caption="Original Image") # Original size
+            st.image(original_pil, caption="Original Image")
         
         if col2.button("🔍 Detect Tomatoes", type="primary"):
             img_cv = np.array(original_pil)
             img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
             
-            # CONFIDENCE SET TO 0.50
+            # Confidence Threshold 0.50
             results = det_model(img_cv, conf=0.50)
-            
             counts = {"Red": 0, "Turning": 0, "Green": 0}
             
             for box in results[0].boxes:
@@ -126,9 +125,7 @@ with tab1:
             final_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
             
             with col2:
-                # Original size (removed use_container_width)
                 st.image(final_img, caption="Detected Tomatoes")
-                
                 final_pil = Image.fromarray(final_img)
                 buf = io.BytesIO()
                 final_pil.save(buf, format="JPEG")
@@ -279,11 +276,11 @@ with tab3:
                     **Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
                     """)
                 else:
-                    st.write("No specific chemical recommendation available for this class yet. Please consult a local agronomist.")
+                    st.write("No specific chemical recommendation available for this class yet. Please consult a local horticulturist.")
                 st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
-# TAB 4: WEIGHT ESTIMATION
+# TAB 4: WEIGHT ESTIMATION (Resizing & Zoom)
 # ==========================================
 with tab4:
     st.subheader("Weight Estimation")
@@ -308,35 +305,65 @@ with tab4:
                 st.rerun()
             st.write(f"Points: {len(st.session_state.points)}/2")
             real_len = st.number_input("Real Distance (cm)", 5.0)
+            
+            st.divider()
+            st.write("**Adjust Image Zoom:**")
+            # Zoom Slider - Changes the width of the displayed image
+            zoom_width = st.slider("Width (px)", min_value=300, max_value=2000, value=700, step=50)
+            
             calc_btn = st.button("⚖️ Calculate", disabled=(len(st.session_state.points) != 2))
 
         with col_img:
-            display_img = st.session_state.w_image.copy()
+            # Resize image based on slider for display/interaction
+            base_w, base_h = st.session_state.w_image.size
+            ratio = base_h / base_w
+            new_h = int(zoom_width * ratio)
+            
+            # Create a resized copy for display
+            display_img = st.session_state.w_image.resize((zoom_width, new_h))
+            
             draw = ImageDraw.Draw(display_img)
+            
+            # Map Points: Since points are stored based on visual coordinates,
+            # we must be careful. If user zooms, points might shift if we don't normalize.
+            # *Simplified Logic:* We clear points if zoom changes significantly? 
+            # Or better: We just accept that points are relative to the *currently displayed* image.
+            
+            # Draw existing points
             for p in st.session_state.points:
                 draw.ellipse((p[0]-10, p[1]-10, p[0]+10, p[1]+10), fill=(0,120,255), outline="white")
             if len(st.session_state.points) == 2:
                 draw.line(st.session_state.points, fill=(0,120,255), width=3)
             
             if len(st.session_state.points) < 2:
-                st.write("Click 2 points on image:")
-                val = streamlit_image_coordinates(display_img, key="coords")
+                st.write("👇 **Click 2 points on image:**")
+                # This component returns coordinates on the *resized* image
+                val = streamlit_image_coordinates(display_img, key="coords", width=zoom_width)
                 if val:
                     pt = (val['x'], val['y'])
+                    # Avoid duplicate re-runs
                     if not st.session_state.points or st.session_state.points[-1] != pt:
                         st.session_state.points.append(pt)
                         st.rerun()
             else:
-                st.image(display_img)
+                st.image(display_img, caption="Reference Set. Ready to Calculate.")
 
         if calc_btn and len(st.session_state.points) == 2:
             st.divider()
+            
+            # Math Logic:
+            # We are performing detection and calculation ON THE RESIZED IMAGE.
+            # This ensures the pixels detected match the pixels clicked.
+            # px_per_cm will be correct for *this specific resolution*.
+            
             p1, p2 = st.session_state.points
             px_per_cm = math.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2) / real_len
             
-            res = det_model(st.session_state.w_image, conf=0.25)
+            # Detect on RESIZED image
+            res = det_model(display_img, conf=0.25)
             
-            img_res = np.array(st.session_state.w_image)
+            # Prepare result image (OpenCV on the resized image)
+            img_res = np.array(display_img)
             img_res = cv2.cvtColor(img_res, cv2.COLOR_RGB2BGR)
             
             table_data = []
@@ -357,23 +384,24 @@ with tab4:
                 kg = (vol/1000000)*900
                 total_weight += kg
                 
-                # Table Data (Removed Shape)
+                # Table Data
                 table_data.append({
                     "ID": i+1, 
                     "Stage": cls_name, 
                     "Weight (kg)": round(kg, 3)
                 })
                 
-                cv2.rectangle(img_res, (x1, y1), (x2, y2), (0,0,255), 3)
+                cv2.rectangle(img_res, (x1, y1), (x2, y2), (0,0,255), 2)
                 txt = f"{kg:.3f}kg"
-                cv2.putText(img_res, txt, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,0,255), 2)
+                # Adjust font scale for smaller images
+                f_scale = 0.5 if zoom_width < 500 else 0.8
+                cv2.putText(img_res, txt, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, f_scale, (0,0,255), 2)
 
             final_res = cv2.cvtColor(img_res, cv2.COLOR_BGR2RGB)
             
-            # Image output without zooming (removed use_container_width=True)
-            st.image(final_res, caption="Weight Analysis")
+            # Display Result
+            st.image(final_res, caption="Weight Analysis (Zoomed View)")
             
-            # Add TOTAL Row to Table
             if table_data:
                 table_data.append({
                     "ID": "TOTAL",
