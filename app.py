@@ -103,7 +103,7 @@ with tab2:
                 mime="video/mp4"
             )
 
-# Leaf Disease Classifier
+# ---------------- TAB 3: Classification ----------------
 with tab3:
     disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
     if disease_file:
@@ -115,7 +115,9 @@ with tab3:
 
         st.image(disease_img, caption="Uploaded Leaf Image", use_column_width=True)
 
-        disease_results = disease_model(disease_img)
+        # Convert PIL → NumPy for classification
+        disease_np = np.array(disease_img)
+        disease_results = disease_model(disease_np)
         probs = disease_results[0].probs
 
         top3_indices = probs.top5[:3]
@@ -133,7 +135,7 @@ with tab3:
         major_class = re.sub(r'[^a-zA-Z0-9]+', '_', raw_class.strip().lower())
 
         st.subheader("Recommended Management Strategy 🌿")
-
+        
         if "bacterial_spot" in major_class:
             st.write("""
 **Chemical:** Copper Oxychloride 50% WP  
