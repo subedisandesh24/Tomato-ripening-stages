@@ -1,198 +1,356 @@
 import streamlit as st
 from ultralytics import YOLO
-import cv2
+from PIL import Image, ImageDraw, ImageFont
 import numpy as np
-from PIL import Image
+import pandas as pd
 import tempfile
+import cv2
+import os
+import math
+from streamlit_image_coordinates import streamlit_image_coordinates
 
-# ----------------------------
-# Load YOLO models
-# ----------------------------
-fruit_model = YOLO("fruit.pt")          # Detection model
-leaf_model = YOLO("leafdisease.pt")     # Classification model
+# --- Page Config ---
+st.set_page_config(layout="wide", page_title="Advanced Tomato Analysis")
 
-# ----------------------------
-# Helper functions
-# ----------------------------
-def annotate_image(results, conf_thres=0.6):
-    """Annotate detection results with colored bounding boxes."""
-    img = results[0].orig_img.copy()
-    for box in results[0].boxes:
-        if box.conf < conf_thres:
-            continue
-        cls_id = int(box.cls[0])
-        label = results[0].names[cls_id]
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
-        color = (0, 0, 255) if label.lower() == "red" else (0, 255, 0) if label.lower() == "green" else (0, 255, 255)
-        cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
-        cv2.putText(img, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-    return img
+# --- Custom Styles ---
+st.markdown("""
+    <style>
+    .main { background-color: #f5f5f5; }
+    </style>
+    """, unsafe_allow_html=True)
 
-def count_fruits(results, conf_thres=0.6):
-    """Count fruits per stage."""
-    counts = {"Red":0, "Turning":0, "Green":0}
-    for box in results[0].boxes:
-        if box.conf < conf_thres:
-            continue
-        cls_id = int(box.cls[0])
-        label = results[0].names[cls_id].capitalize()
-        if label in counts:
-            counts[label] += 1
-    return counts
+# --- Load Models ---
+@st.cache_resource
+def load_models():
+    # Ensure these files are in your GitHub repo
+    det_model = YOLO("fruit.pt") 
+    cls_model = YOLO("leafdisease.pt")
+    return det_model, cls_model
 
-def estimate_weight(length_cm, width_cm, density=900):
-    """Estimate fruit weight using geometric approximation."""
-    if abs(length_cm - width_cm) < 0.1 * length_cm:  # Sphere approx
-        r = width_cm / 2 / 100  # convert cm to m
-        V = (4/3) * np.pi * (r**3)
-    else:  # Ellipsoid approx
-        L = length_cm / 100
-        W = width_cm / 100
-        V = (4/3) * np.pi * (L/2) * (W/2)**2
-    M = V * density  # kg
-    return M
+try:
+    det_model, cls_model = load_models()
+except Exception as e:
+    st.error(f"Error loading models. Ensure 'fruit.pt' and 'leafdisease.pt' are in the directory. Error: {e}")
+    st.stop()
 
-# ----------------------------
-# Streamlit UI
-# ----------------------------
-st.title("🍅 Tomato Monitoring App")
-tab1, tab2, tab3, tab4 = st.tabs(["Fruit Detector", "Video Mode", "Leaf Disease Classifier", "Fruit Weight Estimation"])
+# --- Helpers ---
+COLORS = {
+    "Red": (255, 0, 0),       # Red
+    "Green": (0, 255, 0),     # Green
+    "Turning": (255, 255, 0)  # Yellow
+}
 
-# ----------------------------
-# Tab 1: Fruit Detector
-# ----------------------------
+def get_color(cls_name):
+    # Default to white if class name doesn't match exactly
+    for key in COLORS:
+        if key.lower() in cls_name.lower():
+            return COLORS[key]
+    return (255, 255, 255)
+
+# --- Tabs ---
+tab1, tab2, tab3, tab4 = st.tabs([
+    "🍎 1. Fruit Detector", 
+    "🎥 2. Video Mode", 
+    "🍃 3. Disease Classifier", 
+    "⚖️ 4. Weight Estimation"
+])
+
+# ==========================================
+# TAB 1: FRUIT DETECTOR
+# ==========================================
 with tab1:
-    st.header("Fruit Detector")
-    uploaded_file = st.file_uploader("Upload an image", type=["jpg","jpeg","png","gif","bmp","tiff","webp","heif","heic","svg","eps","raw","psd"])
-    if uploaded_file:
-        image = Image.open(uploaded_file).convert("RGB")
-        img_np = np.array(image)
-        results = fruit_model.predict(img_np, conf=0.6)
-        annotated = annotate_image(results, conf_thres=0.6)
-        counts = count_fruits(results, conf_thres=0.6)
+    st.header("Fruit Detection & Counting")
+    st.write("Upload an image to detect Red, Green, and Turning tomatoes (Confidence > 0.60).")
+    
+    img_file = st.file_uploader("Upload Image", type=['jpg','jpeg','png','bmp','webp'], key="tab1_upload")
+    
+    if img_file:
+        image = Image.open(img_file).convert("RGB")
+        img_array = np.array(image)
+        
+        # Run Detection
+        results = det_model(img_array, conf=0.60)
+        
+        # Process Results
+        draw = ImageDraw.Draw(image)
+        try:
+            font = ImageFont.truetype("arial.ttf", 20)
+        except:
+            font = ImageFont.load_default()
 
-        # Show table
+        counts = {"Red": 0, "Turning": 0, "Green": 0}
+        
+        # Iterate through detections
+        for box in results[0].boxes:
+            coords = box.xyxy[0].tolist() # x1, y1, x2, y2
+            cls_id = int(box.cls[0])
+            conf = float(box.conf[0])
+            cls_name = det_model.names[cls_id]
+            
+            # Map YOLO class names to your specific counters
+            # Assuming your model returns 'Red', 'Green', 'Turning' strings
+            matched_key = None
+            for key in counts.keys():
+                if key.lower() in cls_name.lower():
+                    counts[key] += 1
+                    matched_key = key
+                    break
+            
+            # Draw Box
+            color = COLORS.get(matched_key, (255, 255, 255))
+            draw.rectangle(coords, outline=color, width=4)
+            draw.text((coords[0], coords[1]-20), f"{cls_name} {conf:.2f}", fill=color, font=font)
+
+        # 1. Output Table
         st.subheader("Detection Summary")
-        total = sum(counts.values())
-        st.table({"Stage": list(counts.keys())+["Total"], "Count": list(counts.values())+[total]})
+        total_fruits = sum(counts.values())
+        counts['Total'] = total_fruits
+        df_counts = pd.DataFrame([counts])
+        st.table(df_counts)
+        
+        # 2. Annotated Image
+        st.subheader("Annotated Image")
+        st.image(image, caption="Detected Tomatoes", use_container_width=True)
+        
+        # 3. Download
+        # Save to buffer
+        import io
+        buf = io.BytesIO()
+        image.save(buf, format="JPEG")
+        st.download_button("Download Annotated Image", data=buf.getvalue(), file_name="detected_tomatoes.jpg", mime="image/jpeg")
 
-        # Show annotated image
-        st.image(annotated, caption="Annotated Detection", use_column_width=True)
-
-        # Download option
-        tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        cv2.imwrite(tmpfile.name, cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR))
-        with open(tmpfile.name, "rb") as f:
-            st.download_button("Download Annotated Image", f, file_name="detected.jpg")
-
-# ----------------------------
-# Tab 2: Video Mode
-# ----------------------------
+# ==========================================
+# TAB 2: VIDEO MODE
+# ==========================================
 with tab2:
-    st.header("Video Mode")
-    uploaded_video = st.file_uploader("Upload a video", type=["mp4","avi","mov","wmv","flv","mkv","webm","mpeg","mpg","3gp","avchd"])
-    if uploaded_video:
-        tfile = tempfile.NamedTemporaryFile(delete=False)
-        tfile.write(uploaded_video.read())
+    st.header("Video Detection")
+    st.warning("Note: Processing video on cloud servers can be slow. Short clips are recommended.")
+    
+    video_file = st.file_uploader("Upload Video", type=['mp4', 'avi', 'mov', 'mkv'], key="tab2_upload")
+    
+    if video_file:
+        tfile = tempfile.NamedTemporaryFile(delete=False) 
+        tfile.write(video_file.read())
+        
         cap = cv2.VideoCapture(tfile.name)
-
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4").name
-        out = cv2.VideoWriter(out_path, fourcc, cap.get(cv2.CAP_PROP_FPS),
-                              (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))))
-
+        
+        st.write("Processing video... please wait.")
+        progress_bar = st.progress(0)
+        
+        # Video properties
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # Output setup
+        output_path = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4').name
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v') # Codec
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        
+        frame_count = 0
+        
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
-            results = fruit_model.predict(frame, conf=0.6)
-            annotated = annotate_image(results, conf_thres=0.6)
-            out.write(cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR))
-
+            
+            # Detect
+            results = det_model(frame, conf=0.60)
+            
+            # Annotate Frame using OpenCV
+            for box in results[0].boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                cls_name = det_model.names[int(box.cls[0])]
+                
+                # Determine Color (BGR for OpenCV)
+                color_rgb = get_color(cls_name)
+                color_bgr = (color_rgb[2], color_rgb[1], color_rgb[0]) # Flip to BGR
+                
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color_bgr, 3)
+                cv2.putText(frame, cls_name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color_bgr, 2)
+            
+            out.write(frame)
+            frame_count += 1
+            
+            # Update progress every 10 frames to save resource
+            if frame_count % 10 == 0:
+                progress_bar.progress(min(frame_count / total_frames, 1.0))
+        
         cap.release()
         out.release()
+        progress_bar.progress(1.0)
+        
+        # Display/Download
+        st.success("Processing Complete!")
+        
+        # Read the processed file for download
+        with open(output_path, 'rb') as f:
+            video_bytes = f.read()
+            
+        st.download_button("Download Annotated Video", video_bytes, file_name="annotated_tomatoes.mp4", mime="video/mp4")
 
-        with open(out_path, "rb") as f:
-            st.download_button("Download Annotated Video", f, file_name="detected_video.mp4")
-
-# ----------------------------
-# Tab 3: Leaf Disease Classifier
-# ----------------------------
+# ==========================================
+# TAB 3: DISEASE CLASSIFIER
+# ==========================================
 with tab3:
-    st.header("Leaf Disease Classifier")
-    leaf_file = st.file_uploader("Upload a leaf image", type=["jpg","jpeg","png","bmp","tiff","webp"])
+    st.header("Leaf Disease Classification")
+    leaf_file = st.file_uploader("Upload Leaf Image", type=['jpg','png','jpeg'], key="tab3_upload")
+    
     if leaf_file:
-        image = Image.open(leaf_file).convert("RGB")
-        img_np = np.array(image)
-        results = leaf_model.predict(img_np)
-        probs = results[0].probs
-        if probs is not None:
-            classes = results[0].names
-            top3_idx = probs.topk(3).indices.cpu().numpy()
-            st.subheader("Top 3 Predictions")
-            for idx in top3_idx:
-                st.write(f"{classes[idx]}: {probs[idx]:.2f}")
-            st.write("Recommendation Strategy: (to be added)")
+        img = Image.open(leaf_file)
+        st.image(img, caption="Uploaded Leaf", width=300)
+        
+        if st.button("Classify Disease"):
+            results = cls_model(img)
+            
+            # Get Probabilities
+            probs = results[0].probs
+            top5_indices = probs.top5
+            top5_conf = probs.top5conf.tolist()
+            names = results[0].names
+            
+            top1_name = names[top5_indices[0]]
+            top1_conf = top5_conf[0]
+            
+            st.divider()
+            st.subheader(f"Prediction: :red[{top1_name}]")
+            st.write(f"Confidence: **{top1_conf:.2%}**")
+            
+            st.write("### Top 3 Predictions")
+            for i in range(min(3, len(top5_indices))):
+                name = names[top5_indices[i]]
+                conf = top5_conf[i]
+                st.write(f"{i+1}. **{name}**: {conf:.2%}")
+                st.progress(conf)
+            
+            st.info("💡 Recommendation Strategy: (This section will be updated with specific treatment plans for the detected disease).")
 
-# ----------------------------
-# Tab 4: Fruit Weight Estimation
-# ----------------------------
+# ==========================================
+# TAB 4: WEIGHT ESTIMATION
+# ==========================================
 with tab4:
     st.header("Fruit Weight Estimation")
-    fruit_file = st.file_uploader("Upload an image", type=["jpg","jpeg","png","bmp","tiff","webp"])
-    if fruit_file:
-        image = Image.open(fruit_file).convert("RGB")
-        img_np = np.array(image)
-        results = fruit_model.predict(img_np, conf=0.6)
+    st.write("1. Upload Image. 2. Click two points to calibrate scale. 3. Enter real distance.")
+    
+    # State Management for Calibration
+    if 'calib_points' not in st.session_state:
+        st.session_state['calib_points'] = []
+    
+    weight_file = st.file_uploader("Upload Image for Weight", type=['jpg','png'], key="tab4_upload")
+    
+    if weight_file:
+        image = Image.open(weight_file).convert("RGB")
+        
+        # --- Calibration Step ---
+        st.write("### Step 1: Calibration")
+        st.write("Click two points on the image below (e.g., a ruler or known object width).")
+        
+        # Custom component to get coordinates
+        value = streamlit_image_coordinates(image, key="pil")
+        
+        if value:
+            point = (value["x"], value["y"])
+            # Add point if not duplicate of last click
+            if not st.session_state['calib_points'] or st.session_state['calib_points'][-1] != point:
+                st.session_state['calib_points'].append(point)
+                
+        # Show selected points
+        points = st.session_state['calib_points'][-2:] # Get last 2 points
+        
+        if len(points) == 2:
+            st.success(f"Points Selected: {points[0]} and {points[1]}")
+            
+            # Calculate Pixel Distance
+            pixel_dist = math.sqrt((points[1][0] - points[0][0])**2 + (points[1][1] - points[0][1])**2)
+            
+            real_dist = st.number_input("Enter the real distance between these points (cm):", min_value=0.1, value=5.0)
+            
+            if st.button("Calculate Weights"):
+                # Conversion Factor
+                pixels_per_cm = pixel_dist / real_dist
+                
+                # Run Detection
+                results = det_model(np.array(image), conf=0.5) # Lower threshold slightly for weight to catch more
+                draw = ImageDraw.Draw(image)
+                try:
+                    font = ImageFont.truetype("arial.ttf", 15)
+                except:
+                    font = ImageFont.load_default()
 
-        # Calibration input
-        st.info("Click two points on the image to set scale (not implemented in Streamlit yet).")
-        scale_cm = st.number_input("Enter real-world length (cm) between two points:", min_value=0.1, value=5.0)
-
-        # For demo: assume 1 pixel = 0.1 cm
-        px_to_cm = 0.1
-
-        counts = count_fruits(results, conf_thres=0.6)
-        total = sum(counts.values())
-        weights = []
-        stage_weights = {"Red":0, "Turning":0, "Green":0}
-
-        annotated = results[0].orig_img.copy()
-
-        for box in results[0].boxes:
-            if box.conf < 0.6:
-                continue
-            cls_id = int(box.cls[0])
-            label = results[0].names[cls_id].capitalize()
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            length_px = y2 - y1
-            width_px = x2 - x1
-            length_cm = length_px * px_to_cm
-            width_cm = width_px * px_to_cm
-            weight = estimate_weight(length_cm, width_cm)
-            weights.append(weight)
-            if label in stage_weights:
-                stage_weights[label] += weight
-
-            color = (0, 0, 255) if label == "Red" else (0, 255, 0) if label == "Green" else (0, 255, 255)
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 3)
-            cv2.putText(
-                annotated,
-                f"{label} {weight:.3f} kg",
-                (x1, y1 - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                color,
-                2
-            )
-
-        st.image(annotated, caption="Annotated with weights", use_column_width=True)
-
-        # Download option
-        tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        cv2.imwrite(tmpfile.name, cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR))
-        with open(tmpfile.name, "rb") as f:
-            st.download_button("Download Annotated Image", f, file_name="weights.jpg")
-
-        # Table summary
-        st.sub
+                fruit_data = []
+                DENSITY = 900 # kg/m3
+                
+                for i, box in enumerate(results[0].boxes):
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    cls_name = det_model.names[int(box.cls[0])]
+                    
+                    # Dimensions in Pixels
+                    w_px = x2 - x1
+                    h_px = y2 - y1
+                    
+                    # Dimensions in CM
+                    # Approximating: Width of box is Diameter (W), Height is Length (L)
+                    W_cm = w_px / pixels_per_cm
+                    L_cm = h_px / pixels_per_cm
+                    
+                    # Volume Calculation (cm3)
+                    # Check if spherical (difference < 15%)
+                    if abs(W_cm - L_cm) < (0.15 * L_cm):
+                        # Sphere
+                        r = W_cm / 2
+                        vol_cm3 = (4/3) * math.pi * (r**3)
+                        shape = "Sphere"
+                    else:
+                        # Ellipsoid
+                        vol_cm3 = (4/3) * math.pi * (L_cm/2) * ((W_cm/2)**2)
+                        shape = "Ellipsoid"
+                        
+                    # Mass Calculation
+                    # Convert cm3 to m3: / 1,000,000
+                    vol_m3 = vol_cm3 / 1000000
+                    mass_kg = vol_m3 * DENSITY
+                    
+                    fruit_data.append({
+                        "ID": i+1,
+                        "Stage": cls_name,
+                        "Shape": shape,
+                        "Length (cm)": round(L_cm, 2),
+                        "Diameter (cm)": round(W_cm, 2),
+                        "Weight (kg)": round(mass_kg, 4)
+                    })
+                    
+                    # Annotate
+                    draw.rectangle([x1, y1, x2, y2], outline="red", width=2)
+                    draw.text((x1, y1), f"{mass_kg:.3f}kg", fill="white", font=font)
+                
+                # --- Output Results ---
+                
+                # 1. Annotated Image
+                st.image(image, caption="Weight Estimation", use_container_width=True)
+                
+                # 2. Table
+                if fruit_data:
+                    df = pd.DataFrame(fruit_data)
+                    
+                    # Summary Metrics
+                    total_yield = df["Weight (kg)"].sum()
+                    count_summary = df["Stage"].value_counts().to_dict()
+                    
+                    c1, c2 = st.columns(2)
+                    c1.metric("Total Yield", f"{total_yield:.3f} kg")
+                    c1.write(f"Total Fruits: {len(fruit_data)}")
+                    c2.write("Count by Stage:")
+                    c2.write(count_summary)
+                    
+                    st.dataframe(df)
+                    
+                    # Download Image
+                    buf = io.BytesIO()
+                    image.save(buf, format="JPEG")
+                    st.download_button("Download Weight Analysis Img", data=buf.getvalue(), file_name="tomato_weights.jpg", mime="image/jpeg")
+                else:
+                    st.warning("No tomatoes detected for weight estimation.")
+                    
+        else:
+            st.info("Click two points on the image above to start calibration.")
