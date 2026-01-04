@@ -184,9 +184,13 @@ with tab4:
         with open(tmpfile.name, "rb") as f:
             st.download_button("Download Annotated Image", f, file_name="weights.jpg")
 
-        # Table summary
+              # Table summary
         st.subheader("Yield Summary")
-        st.table({
-            "Stage": list(counts.keys())+["Total"],
-            "Count": list(counts.values())+[total],
-            "Weight (kg)": [f
+        total_weight = sum(weights)
+        summary = {
+            "Stage": list(counts.keys()) + ["Total"],
+            "Count": list(counts.values()) + [total],
+            "Weight (kg)": [round(w, 3) for w in weights] + [round(total_weight, 3)]
+        }
+        st.table(summary)
+
