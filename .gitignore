@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+
+# Streamlit
+.streamlit/
+
+# Models
+*.pt
+
+# Temp files
+*.mp4
+*.jpg
+*.png
+*.avi
+*.mov
+*.mkv
+*.webm
+*.eps
+*.raw
+*.psd
+*.tiff
+*.bmp
+*.gif
+*.heif
+*.heic
+*.svg
