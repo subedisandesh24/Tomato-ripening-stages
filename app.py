@@ -104,7 +104,6 @@ with tab2:
             )
 
 # ---------------- TAB 3: Classification ----------------
-# Leaf Disease Classifier
 with tab3:
     disease_file = st.file_uploader("Upload a tomato leaf image", type=["jpg", "png", "jpeg", "heic"])
     if disease_file:
@@ -116,14 +115,17 @@ with tab3:
 
         st.image(disease_img, caption="Uploaded Leaf Image", use_column_width=True)
 
-        # ✅ Convert PIL → NumPy for classification
-        disease_np = np.array(disease_img)
+        # ✅ Option 1: Pass PIL directly
+        disease_results = disease_model(disease_img)
 
-        # Run classification
-        disease_results = disease_model(disease_np)
+        # ✅ Option 2: Save to temp file and pass path
+        # import tempfile
+        # with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        #     disease_img.save(tmp.name)
+        #     disease_results = disease_model(tmp.name)
+
         probs = disease_results[0].probs
 
-        # Show top-3 predictions
         top3_indices = probs.top5[:3]
         st.subheader("Top-3 Disease Predictions 🌿")
         for idx in top3_indices:
@@ -134,83 +136,3 @@ with tab3:
             else:
                 st.write(f"- {class_name}: {confidence:.2f}")
 
-        # Normalize top-1 class name for strategy mapping
-        raw_class = disease_model.names[probs.top1]
-        major_class = re.sub(r'[^a-zA-Z0-9]+', '_', raw_class.strip().lower())
-
-        st.subheader("Recommended Management Strategy 🌿")
-        
-        if "bacterial_spot" in major_class:
-            st.write("""
-**Chemical:** Copper Oxychloride 50% WP  
-**Brands (Nepal):** Blitox, Blue Copper, Cu-50  
-**Dosage:** 2–3 g per liter of water  
-**Note:** Spray early morning or late evening to avoid leaf burn
-            """)
-
-        elif "early_blight" in major_class or "late_blight" in major_class:
-            st.write("""
-**Protective Chemical:** Mancozeb 75% WP  
-**Brands:** Dithane M-45, Indofil M-45  
-**Curative Chemical:** Metalaxyl 8% + Mancozeb 64% WP  
-**Brands:** Krilaxyl, Ridomil Gold, Matco  
-**Dosage:** 2 g per liter of water
-            """)
-
-        elif "leaf_mold" in major_class:
-            st.write("""
-**Chemical:** Carbendazim 50% WP  
-**Brands:** Bavistin, Beve-50  
-**Dosage:** 1–2 g per liter of water  
-**Alternative:** Chlorothalonil (Kavach)
-            """)
-
-        elif "powdery_mildew" in major_class:
-            st.write("""
-**Chemical:** Wettable Sulphur 80% WP or Hexaconazole 5% EC  
-**Brands:** Sulfex, Contaf, Sitara  
-**Dosage:** 2 g per liter (Sulphur) or 2 ml per liter (Hexaconazole)
-            """)
-
-        elif "septoria" in major_class:
-            st.write("""
-**Chemical:** Chlorothalonil 75% WP  
-**Brands:** Kavach, Ishan  
-**Dosage:** 2 g per liter of water
-            """)
-
-        elif "spider_mites" in major_class or "two_spotted_spider_mite" in major_class:
-            st.write("""
-**Chemical:** Abamectin 1.8% or 1.9% EC  
-**Brands:** Vertimec, Abacin, V-mectin  
-**Dosage:** 0.5–1 ml per liter of water  
-**Note:** Spray underside of leaves where mites hide
-            """)
-
-        elif "target_spot" in major_class:
-            st.write("""
-**Chemical:** Azoxystrobin 23% SC or Mancozeb  
-**Brands:** Amistar, Mirador  
-**Dosage:** 1 ml per liter of water
-            """)
-
-        elif "tomato_yellow_leaf_curl_virus" in major_class or "tylcv" in major_class:
-            st.write("""
-**Disease Type:** Viral (TYLCV) — no chemical cure  
-**Vector Control:** Whitefly (Bemisia tabaci)  
-**Chemical:** Imidacloprid 17.8% SL or Acetamiprid 20% SP  
-**Brands:** Confidor, Media, Pride, Manik  
-**Dosage:** 0.5 ml (Imidacloprid) or 0.5 g (Acetamiprid) per liter of water
-            """)
-
-        elif "tomato_mosaic_virus" in major_class:
-            st.write("""
-**Disease Type:** Tomato Mosaic Virus (ToMV) — viral disease, no chemical cure  
-**Management Strategy:**  
-- Remove and destroy infected plants to prevent spread  
-- Practice crop rotation and avoid planting tomatoes in the same soil consecutively  
-- Use resistant/tolerant varieties if available  
-- Disinfect tools and equipment regularly  
-- Control insect vectors (aphids, thrips) that may aid transmission  
-**Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
-            """)
