@@ -155,9 +155,9 @@ with tab4:
         counts = count_fruits(results, conf_thres=0.6)
         total = sum(counts.values())
         weights = []
+        stage_weights = {"Red":0, "Turning":0, "Green":0}
 
         annotated = results[0].orig_img.copy()
-        stage_weights = {"Red":0, "Turning":0, "Green":0}
 
         for box in results[0].boxes:
             if box.conf < 0.6:
@@ -176,4 +176,23 @@ with tab4:
 
             color = (0, 0, 255) if label == "Red" else (0, 255, 0) if label == "Green" else (0, 255, 255)
             cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 3)
-            cv2.putText(annotated, f"{label} {weight:.3f} kg", (x1, y1 - 10), cv2.FONT
+            cv2.putText(
+                annotated,
+                f"{label} {weight:.3f} kg",
+                (x1, y1 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                color,
+                2
+            )
+
+        st.image(annotated, caption="Annotated with weights", use_column_width=True)
+
+        # Download option
+        tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+        cv2.imwrite(tmpfile.name, cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR))
+        with open(tmpfile.name, "rb") as f:
+            st.download_button("Download Annotated Image", f, file_name="weights.jpg")
+
+        # Table summary
+        st.sub
