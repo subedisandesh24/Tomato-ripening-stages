@@ -1,6 +1,6 @@
 import streamlit as st
 from ultralytics import YOLO
-from PIL import Image
+from PIL import Image, ImageDraw  # <--- FIXED: Added ImageDraw here
 import numpy as np
 import pandas as pd
 import tempfile
@@ -297,7 +297,7 @@ with tab3:
                     **Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
                     """)
                 else:
-                    st.write("No specific chemical recommendation available for this class yet. Please consult a local agronomist.")
+                    st.write("No specific chemical recommendation available for this class yet. Please consult a local horticulturist.")
                 
                 st.markdown('</div>', unsafe_allow_html=True)
 
