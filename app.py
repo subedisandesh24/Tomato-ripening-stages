@@ -89,13 +89,15 @@ with tab1:
         original_pil = Image.open(img_file).convert("RGB")
         col1, col2 = st.columns(2)
         with col1:
-            st.image(original_pil, caption="Original Image", use_container_width=True)
+            st.image(original_pil, caption="Original Image") # Original size
         
         if col2.button("🔍 Detect Tomatoes", type="primary"):
             img_cv = np.array(original_pil)
             img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
             
-            results = det_model(img_cv, conf=0.25)
+            # CONFIDENCE SET TO 0.50
+            results = det_model(img_cv, conf=0.50)
+            
             counts = {"Red": 0, "Turning": 0, "Green": 0}
             
             for box in results[0].boxes:
@@ -124,7 +126,9 @@ with tab1:
             final_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
             
             with col2:
-                st.image(final_img, caption="Detected Tomatoes", use_container_width=True)
+                # Original size (removed use_container_width)
+                st.image(final_img, caption="Detected Tomatoes")
+                
                 final_pil = Image.fromarray(final_img)
                 buf = io.BytesIO()
                 final_pil.save(buf, format="JPEG")
