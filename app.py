@@ -12,7 +12,7 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 # --- Page Config ---
 st.set_page_config(layout="wide", page_title="Advance Tomato Monitoring System")
 
-# --- Custom CSS (Larger Fonts) ---
+# --- Custom CSS (Larger Fonts & Styling) ---
 st.markdown("""
     <style>
     /* Main Title */
@@ -74,6 +74,7 @@ st.markdown('<p class="main-title">Advance Tomato Monitoring System</p>', unsafe
 # --- Load Models ---
 @st.cache_resource
 def load_models():
+    # Ensure 'fruit.pt' and 'leafdisease.pt' are in the same folder as app.py
     det_model = YOLO("fruit.pt") 
     cls_model = YOLO("leafdisease.pt")
     return det_model, cls_model
@@ -118,14 +119,17 @@ with tab1:
         original_pil = Image.open(img_file).convert("RGB")
         col1, col2 = st.columns(2)
         with col1:
+            # Shows original size (no use_container_width)
             st.image(original_pil, caption="Original Image")
         
         if col2.button("🔍 Detect Tomatoes", type="primary"):
             img_cv = np.array(original_pil)
             img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
             
-            # Using agnostic_nms=True here as well to prevent overlapping duplicates
+            # Confidence 0.50 as requested
+            # agnostic_nms=True prevents double counting overlaps
             results = det_model(img_cv, conf=0.50, iou=0.5, agnostic_nms=True)
+            
             counts = {"Red": 0, "Turning": 0, "Green": 0}
             
             for box in results[0].boxes:
@@ -134,12 +138,14 @@ with tab1:
                 cls_name = det_model.names[cls_id]
                 conf = float(box.conf[0])
                 
+                # Update Counts
                 found_key = False
                 for key in counts.keys():
                     if key.lower() in cls_name.lower():
                         counts[key] += 1
                         found_key = True
                 
+                # Draw Box & Text
                 color = get_color_bgr(cls_name)
                 label = f"{cls_name} {conf:.2f}"
                 
@@ -154,7 +160,9 @@ with tab1:
             final_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
             
             with col2:
+                # Shows original size
                 st.image(final_img, caption="Detected Tomatoes")
+                
                 final_pil = Image.fromarray(final_img)
                 buf = io.BytesIO()
                 final_pil.save(buf, format="JPEG")
@@ -194,7 +202,6 @@ with tab2:
             ret, frame = cap.read()
             if not ret: break
             
-            # Added NMS fix here too
             results = det_model(frame, conf=0.35, iou=0.5, agnostic_nms=True)
             
             for box in results[0].boxes:
@@ -233,12 +240,10 @@ with tab3:
             st.divider()
             st.markdown("### 📊 Analysis Results")
             
-            # Get Top 3
             top5_indices = probs.top5
             top5_conf = probs.top5conf.tolist()
             
             col_res1, col_res2 = st.columns([1, 1])
-            
             with col_res1:
                 st.write("**Top 3 Confidence Levels:**")
                 for i in range(min(3, len(top5_indices))):
@@ -251,7 +256,7 @@ with tab3:
                     else:
                         st.write(f"{i+1}. {disease_name}: {confidence:.2%}")
             
-            # --- RECOMMENDATION FOR TOP 1 ONLY ---
+            # --- RECOMMENDATION (Top 1 Only) ---
             top1_idx = probs.top1
             top1_name = names[top1_idx]
             
@@ -333,7 +338,7 @@ with tab3:
                 st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
-# TAB 4: WEIGHT ESTIMATION (Resizing & Zoom)
+# TAB 4: WEIGHT ESTIMATION
 # ==========================================
 with tab4:
     st.subheader("Weight Estimation")
@@ -366,14 +371,15 @@ with tab4:
             calc_btn = st.button("⚖️ Calculate", disabled=(len(st.session_state.points) != 2))
 
         with col_img:
+            # Resize Logic for Display/Zoom
             base_w, base_h = st.session_state.w_image.size
             ratio = base_h / base_w
             new_h = int(zoom_width * ratio)
             
             display_img = st.session_state.w_image.resize((zoom_width, new_h))
-            
             draw = ImageDraw.Draw(display_img)
             
+            # Draw Points/Lines
             for p in st.session_state.points:
                 draw.ellipse((p[0]-10, p[1]-10, p[0]+10, p[1]+10), fill=(0,120,255), outline="white")
             if len(st.session_state.points) == 2:
@@ -395,9 +401,8 @@ with tab4:
             p1, p2 = st.session_state.points
             px_per_cm = math.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2) / real_len
             
-            # --- FIX FOR DOUBLE COUNTING ---
-            # iou=0.5: Removes boxes overlapping more than 50%
-            # agnostic_nms=True: Merges Red/Green/Turning boxes if they overlap significantly
+            # Detection on resized image
+            # iou=0.5 and agnostic_nms=True to fix double counting
             res = det_model(display_img, conf=0.35, iou=0.5, agnostic_nms=True)
             
             img_res = np.array(display_img)
@@ -421,12 +426,14 @@ with tab4:
                 kg = (vol/1000000)*900
                 total_weight += kg
                 
+                # Table Data: "No", "Stage", "Weight"
                 table_data.append({
-                    "ID": i+1, 
+                    "No": i+1, 
                     "Stage": cls_name, 
                     "Weight (kg)": round(kg, 3)
                 })
                 
+                # Annotation
                 cv2.rectangle(img_res, (x1, y1), (x2, y2), (0,0,255), 2)
                 txt = f"{kg:.3f}kg"
                 f_scale = 0.5 if zoom_width < 500 else 0.8
@@ -436,15 +443,35 @@ with tab4:
             
             st.image(final_res, caption="Weight Analysis (Zoomed View)")
             
+            # Add Total Row
             if table_data:
                 table_data.append({
-                    "ID": "TOTAL",
+                    "No": "TOTAL",
                     "Stage": f"{len(table_data)} Fruits",
                     "Weight (kg)": f"{total_weight:.3f}"
                 })
             
             st.markdown("### Detailed List")
-            st.dataframe(pd.DataFrame(table_data), use_container_width=True)
+            
+            # --- Table Styling ---
+            df = pd.DataFrame(table_data)
+            
+            def style_dataframe(x):
+                # Empty style df
+                df_styler = pd.DataFrame('', index=x.index, columns=x.columns)
+                # Highlight 1st Column (No)
+                df_styler.iloc[:, 0] = 'font-weight: bold; background-color: #f0f2f6; color: black;'
+                # Highlight Last Row (TOTAL)
+                df_styler.iloc[-1, :] = 'font-weight: bold; background-color: #ffcccc; color: black;'
+                # Highlight Specific Total Cell
+                df_styler.iloc[-1, 0] = 'font-weight: bold; background-color: #ff4b4b; color: white;'
+                return df_styler
+
+            st.dataframe(
+                df.style.apply(style_dataframe, axis=None), 
+                use_container_width=True, 
+                hide_index=True
+            )
             
             buf = io.BytesIO()
             Image.fromarray(final_res).save(buf, format="JPEG")
