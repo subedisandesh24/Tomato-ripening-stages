@@ -12,29 +12,58 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 # --- Page Config ---
 st.set_page_config(layout="wide", page_title="Advance Tomato Monitoring System")
 
-# --- Custom CSS ---
+# --- Custom CSS (Larger Fonts) ---
 st.markdown("""
     <style>
+    /* Main Title */
     .main-title {
-        font-size: 3rem;
+        font-size: 3.5rem;
         font-weight: 800;
         color: #ff4b4b;
         text-align: center;
-        margin-bottom: 30px;
+        margin-bottom: 20px;
     }
+    
+    /* Global Font Increase */
+    html, body, [class*="css"] {
+        font-size: 18px;
+    }
+    
+    /* Tab Labels */
+    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
+        font-size: 22px;
+        font-weight: bold;
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        font-weight: 700 !important;
+    }
+    
+    /* Buttons */
+    .stButton button {
+        font-size: 20px !important;
+        font-weight: 600 !important;
+    }
+
+    /* Footer */
     .footer {
-        font-size: 14px;
-        color: #888;
+        font-size: 16px;
+        color: #666;
         text-align: center;
         margin-top: 50px;
         padding: 20px;
         border-top: 1px solid #eee;
+        font-weight: bold;
     }
+    
+    /* Recommendation Box */
     .recommendation-box {
         background-color: #f0f2f6;
-        padding: 20px;
+        padding: 25px;
         border-radius: 10px;
-        border-left: 5px solid #ff4b4b;
+        border-left: 8px solid #ff4b4b;
+        font-size: 18px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -57,7 +86,7 @@ except Exception as e:
 
 # --- Helper Functions ---
 COLORS = {
-    "red": (0, 0, 255),       # Red (BGR for OpenCV)
+    "red": (0, 0, 255),       # Red (BGR)
     "green": (0, 255, 0),     # Green
     "turning": (0, 255, 255), # Yellow
     "default": (255, 255, 255)
@@ -196,15 +225,37 @@ with tab3:
             results = cls_model(img)
             names = results[0].names
             probs = results[0].probs
+            
+            # --- SHOW TOP 3 CONFIDENCE ---
+            st.divider()
+            st.markdown("### 📊 Analysis Results")
+            
+            # Get Top 3
+            top5_indices = probs.top5
+            top5_conf = probs.top5conf.tolist()
+            
+            col_res1, col_res2 = st.columns([1, 1])
+            
+            with col_res1:
+                st.write("**Top 3 Confidence Levels:**")
+                for i in range(min(3, len(top5_indices))):
+                    idx = top5_indices[i]
+                    disease_name = names[idx]
+                    confidence = top5_conf[i]
+                    
+                    # Formatting logic
+                    if i == 0:
+                        st.write(f"1. 🔴 **{disease_name}**: {confidence:.2%}")
+                    else:
+                        st.write(f"{i+1}. {disease_name}: {confidence:.2%}")
+            
+            # --- RECOMMENDATION FOR TOP 1 ONLY ---
             top1_idx = probs.top1
             top1_name = names[top1_idx]
-            conf = probs.top1conf.item()
             
-            st.divider()
-            st.markdown(f"### Diagnosis: :red[{top1_name}]")
-            st.write(f"**Confidence Level:** {conf:.2%}")
+            st.markdown("---")
+            st.markdown(f"#### 🛡️ Recommended Strategy for: :red[{top1_name}]")
             
-            st.markdown("#### 🛡️ Recommended Strategy")
             major_class = top1_name.lower().replace(" ", "_")
             
             with st.container():
@@ -276,7 +327,7 @@ with tab3:
                     **Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
                     """)
                 else:
-                    st.write("No specific chemical recommendation available for this class yet. Please consult a local horticulturist.")
+                    st.write("No specific chemical recommendation available for this class yet. Please consult a local agronomist.")
                 st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
@@ -308,28 +359,19 @@ with tab4:
             
             st.divider()
             st.write("**Adjust Image Zoom:**")
-            # Zoom Slider - Changes the width of the displayed image
             zoom_width = st.slider("Width (px)", min_value=300, max_value=2000, value=700, step=50)
             
             calc_btn = st.button("⚖️ Calculate", disabled=(len(st.session_state.points) != 2))
 
         with col_img:
-            # Resize image based on slider for display/interaction
             base_w, base_h = st.session_state.w_image.size
             ratio = base_h / base_w
             new_h = int(zoom_width * ratio)
             
-            # Create a resized copy for display
             display_img = st.session_state.w_image.resize((zoom_width, new_h))
             
             draw = ImageDraw.Draw(display_img)
             
-            # Map Points: Since points are stored based on visual coordinates,
-            # we must be careful. If user zooms, points might shift if we don't normalize.
-            # *Simplified Logic:* We clear points if zoom changes significantly? 
-            # Or better: We just accept that points are relative to the *currently displayed* image.
-            
-            # Draw existing points
             for p in st.session_state.points:
                 draw.ellipse((p[0]-10, p[1]-10, p[0]+10, p[1]+10), fill=(0,120,255), outline="white")
             if len(st.session_state.points) == 2:
@@ -337,11 +379,9 @@ with tab4:
             
             if len(st.session_state.points) < 2:
                 st.write("👇 **Click 2 points on image:**")
-                # This component returns coordinates on the *resized* image
                 val = streamlit_image_coordinates(display_img, key="coords", width=zoom_width)
                 if val:
                     pt = (val['x'], val['y'])
-                    # Avoid duplicate re-runs
                     if not st.session_state.points or st.session_state.points[-1] != pt:
                         st.session_state.points.append(pt)
                         st.rerun()
@@ -350,19 +390,11 @@ with tab4:
 
         if calc_btn and len(st.session_state.points) == 2:
             st.divider()
-            
-            # Math Logic:
-            # We are performing detection and calculation ON THE RESIZED IMAGE.
-            # This ensures the pixels detected match the pixels clicked.
-            # px_per_cm will be correct for *this specific resolution*.
-            
             p1, p2 = st.session_state.points
             px_per_cm = math.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2) / real_len
             
-            # Detect on RESIZED image
             res = det_model(display_img, conf=0.25)
             
-            # Prepare result image (OpenCV on the resized image)
             img_res = np.array(display_img)
             img_res = cv2.cvtColor(img_res, cv2.COLOR_RGB2BGR)
             
@@ -384,7 +416,6 @@ with tab4:
                 kg = (vol/1000000)*900
                 total_weight += kg
                 
-                # Table Data
                 table_data.append({
                     "ID": i+1, 
                     "Stage": cls_name, 
@@ -393,13 +424,11 @@ with tab4:
                 
                 cv2.rectangle(img_res, (x1, y1), (x2, y2), (0,0,255), 2)
                 txt = f"{kg:.3f}kg"
-                # Adjust font scale for smaller images
                 f_scale = 0.5 if zoom_width < 500 else 0.8
                 cv2.putText(img_res, txt, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, f_scale, (0,0,255), 2)
 
             final_res = cv2.cvtColor(img_res, cv2.COLOR_BGR2RGB)
             
-            # Display Result
             st.image(final_res, caption="Weight Analysis (Zoomed View)")
             
             if table_data:
