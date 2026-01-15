@@ -124,8 +124,8 @@ with tab1:
             img_cv = np.array(original_pil)
             img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
             
-            # Confidence Threshold 0.50
-            results = det_model(img_cv, conf=0.50)
+            # Using agnostic_nms=True here as well to prevent overlapping duplicates
+            results = det_model(img_cv, conf=0.50, iou=0.5, agnostic_nms=True)
             counts = {"Red": 0, "Turning": 0, "Green": 0}
             
             for box in results[0].boxes:
@@ -193,7 +193,10 @@ with tab2:
         while cap.isOpened() and frame_cnt < max_frames:
             ret, frame = cap.read()
             if not ret: break
-            results = det_model(frame, conf=0.35)
+            
+            # Added NMS fix here too
+            results = det_model(frame, conf=0.35, iou=0.5, agnostic_nms=True)
+            
             for box in results[0].boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 cls_name = det_model.names[int(box.cls[0])]
@@ -243,7 +246,6 @@ with tab3:
                     disease_name = names[idx]
                     confidence = top5_conf[i]
                     
-                    # Formatting logic
                     if i == 0:
                         st.write(f"1. 🔴 **{disease_name}**: {confidence:.2%}")
                     else:
@@ -393,7 +395,10 @@ with tab4:
             p1, p2 = st.session_state.points
             px_per_cm = math.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2) / real_len
             
-            res = det_model(display_img, conf=0.25)
+            # --- FIX FOR DOUBLE COUNTING ---
+            # iou=0.5: Removes boxes overlapping more than 50%
+            # agnostic_nms=True: Merges Red/Green/Turning boxes if they overlap significantly
+            res = det_model(display_img, conf=0.35, iou=0.5, agnostic_nms=True)
             
             img_res = np.array(display_img)
             img_res = cv2.cvtColor(img_res, cv2.COLOR_RGB2BGR)
