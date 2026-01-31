@@ -12,10 +12,9 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 # --- Page Config ---
 st.set_page_config(layout="wide", page_title="Advance Tomato Monitoring System")
 
-# --- Custom CSS (Larger Fonts & Styling) ---
+# --- Custom CSS ---
 st.markdown("""
     <style>
-    /* Main Title */
     .main-title {
         font-size: 3.5rem;
         font-weight: 800;
@@ -23,30 +22,17 @@ st.markdown("""
         text-align: center;
         margin-bottom: 20px;
     }
-    
-    /* Global Font Increase */
     html, body, [class*="css"] {
         font-size: 18px;
     }
-    
-    /* Tab Labels */
     .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
         font-size: 22px;
         font-weight: bold;
     }
-    
-    /* Headers */
-    h1, h2, h3 {
-        font-weight: 700 !important;
-    }
-    
-    /* Buttons */
     .stButton button {
         font-size: 20px !important;
         font-weight: 600 !important;
     }
-
-    /* Footer */
     .footer {
         font-size: 16px;
         color: #666;
@@ -56,8 +42,6 @@ st.markdown("""
         border-top: 1px solid #eee;
         font-weight: bold;
     }
-    
-    /* Recommendation Box */
     .recommendation-box {
         background-color: #f0f2f6;
         padding: 25px;
@@ -71,7 +55,7 @@ st.markdown("""
 # --- Title ---
 st.markdown('<p class="main-title">Advance Tomato Monitoring System</p>', unsafe_allow_html=True)
 
-# --- Load Models (Now loading 3 models) ---
+# --- Load Models ---
 @st.cache_resource
 def load_models():
     # 1. Fruit Detection
@@ -91,9 +75,9 @@ except Exception as e:
 
 # --- Helper Functions ---
 COLORS = {
-    "red": (0, 0, 255),       # Red (BGR)
-    "green": (0, 255, 0),     # Green
-    "turning": (0, 255, 255), # Yellow
+    "red": (0, 0, 255),
+    "green": (0, 255, 0),
+    "turning": (0, 255, 255),
     "default": (255, 255, 255)
 }
 
@@ -128,47 +112,26 @@ with tab1:
         if col2.button("🔍 Detect Tomatoes", type="primary"):
             img_cv = np.array(original_pil)
             img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
-            
-            # Confidence 0.50
             results = det_model(img_cv, conf=0.50, iou=0.5, agnostic_nms=True)
-            
             counts = {"Red": 0, "Turning": 0, "Green": 0}
             
             for box in results[0].boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                cls_id = int(box.cls[0])
-                cls_name = det_model.names[cls_id]
+                cls_name = det_model.names[int(box.cls[0])]
                 conf = float(box.conf[0])
-                
-                # Update Counts
-                found_key = False
                 for key in counts.keys():
                     if key.lower() in cls_name.lower():
                         counts[key] += 1
-                        found_key = True
-                
-                # Draw Box & Text
                 color = get_color_bgr(cls_name)
-                label = f"{cls_name} {conf:.2f}"
-                
                 cv2.rectangle(img_cv, (x1, y1), (x2, y2), color, 4)
-                
-                font_scale = 1.5 
-                thickness = 3
-                (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
-                cv2.rectangle(img_cv, (x1, y1 - h - 10), (x1 + w, y1), color, -1)
-                cv2.putText(img_cv, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0,0,0), thickness)
+                cv2.putText(img_cv, f"{cls_name} {conf:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
 
             final_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
-            
             with col2:
                 st.image(final_img, caption="Detected Tomatoes")
-                
-                final_pil = Image.fromarray(final_img)
                 buf = io.BytesIO()
-                final_pil.save(buf, format="JPEG")
+                Image.fromarray(final_img).save(buf, format="JPEG")
                 st.download_button("⬇️ Download Result", data=buf.getvalue(), file_name="detected.jpg", mime="image/jpeg")
-
             st.subheader("Count Summary")
             counts["Total"] = sum(counts.values())
             st.dataframe(pd.DataFrame([counts]))
@@ -178,189 +141,95 @@ with tab1:
 # ==========================================
 with tab2:
     st.subheader("Video Detection")
-    st.write("Upload a video. The system will process the **entire duration**.")
     vid_file = st.file_uploader("Upload Video", type=['mp4', 'avi', 'mov'], key="t2_up")
     
     if vid_file:
         tfile = tempfile.NamedTemporaryFile(delete=False)
         tfile.write(vid_file.read())
         cap = cv2.VideoCapture(tfile.name)
-        
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        st.info(f"Video Loaded: {total_frames} frames ({total_frames/fps:.1f} seconds). Processing...")
-        
+        st.info(f"Processing Video...")
         out_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4').name
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(out_file, fourcc, fps, (width, height))
         
         progress_bar = st.progress(0)
-        status_text = st.empty()
-        
         frame_cnt = 0
-        
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret: break
-            
             results = det_model(frame, conf=0.35, iou=0.5, agnostic_nms=True)
-            
             for box in results[0].boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 cls_name = det_model.names[int(box.cls[0])]
-                color = get_color_bgr(cls_name)
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
-                cv2.putText(frame, cls_name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
-            
+                cv2.rectangle(frame, (x1, y1), (x2, y2), get_color_bgr(cls_name), 3)
             out.write(frame)
             frame_cnt += 1
-            
-            if frame_cnt % 5 == 0 or frame_cnt == total_frames:
-                percentage = frame_cnt / total_frames
-                progress_bar.progress(min(percentage, 1.0))
-                status_text.text(f"Processing: {int(percentage*100)}% complete ({frame_cnt}/{total_frames} frames)")
+            progress_bar.progress(frame_cnt / total_frames)
             
         cap.release()
         out.release()
-        progress_bar.progress(1.0)
-        status_text.success("Processing Complete!")
-        
+        st.success("Processing Complete!")
         with open(out_file, 'rb') as f:
-            st.download_button("⬇️ Download Annotated Video", f.read(), file_name="annotated_video.mp4", mime="video/mp4")
+            st.download_button("⬇️ Download Video", f.read(), file_name="annotated_video.mp4", mime="video/mp4")
 
 # ==========================================
-# TAB 3: DISEASE CLASSIFIER (WITH DETECTION GATEKEEPER)
+# TAB 3: DISEASE CLASSIFIER (WITH GATEKEEPER)
 # ==========================================
 with tab3:
     st.subheader("Leaf Disease Classification & Strategy")
-    leaf_file = st.file_uploader("Upload Leaf", type=['jpg','png'], key="t3_up")
+    leaf_file = st.file_uploader("Upload Leaf", type=['jpg','png','jpeg'], key="t3_up")
     
     if leaf_file:
-        img = Image.open(leaf_file)
-        st.image(img, width=300)
+        img = Image.open(leaf_file).convert("RGB")
+        st.image(img, width=350, caption="Uploaded Image")
         
-        if st.button("Classify & Recommend"):
-            # --- STEP 1: DETECT LEAF ---
-            # Use leafbest.pt to check if there is a leaf
-            # Using slightly lower conf (0.25) to be safe (we just want to know if a leaf exists)
-            det_results = leaf_det_model(img, conf=0.25) 
+        if st.button("Classify & Recommend", type="primary"):
+            # --- STEP 1: DETECT LEAF (The Gatekeeper) ---
+            det_results = leaf_det_model(img, conf=0.30) 
             
-            # Check if any boxes were found
             if len(det_results[0].boxes) == 0:
-                st.error("⚠️ **No Tomato Leaf Detected**")
-                st.warning("The system could not find a leaf in this image. Please upload a clear photo of a tomato leaf.")
-                st.info("Note: This prevents analyzing random objects like houses or cars.")
-                
+                # Logic: If leafbest.pt do not detect leaf then say "No leaf"
+                st.error("❌ **No Leaf Detected**")
+                st.warning("The system could not identify a tomato leaf in this image. Please ensure the leaf is clearly visible and try again.")
             else:
                 # --- STEP 2: CLASSIFY DISEASE ---
-                # A leaf was found, so now we run the classifier
-                
-                results = cls_model(img)
-                names = results[0].names
-                probs = results[0].probs
-                
-                # Get Top Predictions
-                top5_indices = probs.top5
-                top5_conf = probs.top5conf.tolist()
-                
-                # Display Results
-                st.divider()
-                st.markdown("### 📊 Analysis Results")
-                
-                col_res1, col_res2 = st.columns([1, 1])
-                with col_res1:
-                    st.write("**Top 3 Confidence Levels:**")
-                    for i in range(min(3, len(top5_indices))):
-                        idx = top5_indices[i]
-                        disease_name = names[idx]
-                        confidence = top5_conf[i]
-                        
-                        if i == 0:
-                            st.write(f"1. 🔴 **{disease_name}**: {confidence:.2%}")
-                        else:
-                            st.write(f"{i+1}. {disease_name}: {confidence:.2%}")
-                
-                top1_idx = probs.top1
-                top1_name = names[top1_idx]
-                
-                st.markdown("---")
-                st.markdown(f"#### 🛡️ Recommended Strategy for: :red[{top1_name}]")
-                
-                major_class = top1_name.lower().replace(" ", "_")
-                
-                with st.container():
+                # A leaf was found, now proceed to classification using leafdisease.pt
+                with st.spinner('Analyzing Leaf Health...'):
+                    results = cls_model(img)
+                    names = results[0].names
+                    probs = results[0].probs
+                    
+                    top1_name = names[probs.top1]
+                    top1_conf = probs.top1conf.item()
+                    
+                    st.divider()
+                    st.success(f"**Result:** {top1_name} ({top1_conf:.2%})")
+                    
+                    st.markdown(f"#### 🛡️ Recommended Strategy for: :red[{top1_name}]")
+                    major_class = top1_name.lower().replace(" ", "_")
+                    
                     st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
                     if "bacterial_spot" in major_class:
-                        st.markdown("""
-                        **Chemical:** Copper Oxychloride 50% WP  
-                        **Brands (Nepal):** Blitox, Blue Copper, Cu-50  
-                        **Dosage:** 2–3 g per liter of water  
-                        **Note:** Spray early morning or late evening to avoid leaf burn
-                        """)
+                        st.markdown("**Chemical:** Copper Oxychloride 50% WP (Blitox) | **Dosage:** 2–3 g/L")
                     elif "early_blight" in major_class or "late_blight" in major_class:
-                        st.markdown("""
-                        **Protective Chemical:** Mancozeb 75% WP  
-                        **Brands:** Dithane M-45, Indofil M-45  
-                        **Curative Chemical:** Metalaxyl 8% + Mancozeb 64% WP  
-                        **Brands:** Krilaxyl, Ridomil Gold, Matco  
-                        **Dosage:** 2 g per liter of water
-                        """)
+                        st.markdown("**Chemical:** Mancozeb 75% WP (Dithane M-45) or Ridomil Gold | **Dosage:** 2 g/L")
                     elif "leaf_mold" in major_class:
-                        st.markdown("""
-                        **Chemical:** Carbendazim 50% WP  
-                        **Brands:** Bavistin, Beve-50  
-                        **Dosage:** 1–2 g per liter of water  
-                        **Alternative:** Chlorothalonil (Kavach)
-                        """)
+                        st.markdown("**Chemical:** Carbendazim 50% WP (Bavistin) | **Dosage:** 1–2 g/L")
                     elif "powdery_mildew" in major_class:
-                        st.markdown("""
-                        **Chemical:** Wettable Sulphur 80% WP or Hexaconazole 5% EC  
-                        **Brands:** Sulfex, Contaf, Sitara  
-                        **Dosage:** 2 g per liter (Sulphur) or 2 ml per liter (Hexaconazole)
-                        """)
-                    elif "septoria" in major_class:
-                        st.markdown("""
-                        **Chemical:** Chlorothalonil 75% WP  
-                        **Brands:** Kavach, Ishan  
-                        **Dosage:** 2 g per liter of water
-                        """)
-                    elif "spider_mites" in major_class or "two_spotted_spider_mite" in major_class:
-                        st.markdown("""
-                        **Chemical:** Abamectin 1.8% or 1.9% EC  
-                        **Brands:** Vertimec, Abacin, V-mectin  
-                        **Dosage:** 0.5–1 ml per liter of water  
-                        **Note:** Spray underside of leaves where mites hide
-                        """)
-                    elif "target_spot" in major_class:
-                        st.markdown("""
-                        **Chemical:** Azoxystrobin 23% SC or Mancozeb  
-                        **Brands:** Amistar, Mirador  
-                        **Dosage:** 1 ml per liter of water
-                        """)
-                    elif "tomato_yellow_leaf_curl_virus" in major_class or "tylcv" in major_class:
-                        st.markdown("""
-                        **Disease Type:** Viral (TYLCV) — no chemical cure  
-                        **Vector Control:** Whitefly (Bemisia tabaci)  
-                        **Chemical:** Imidacloprid 17.8% SL or Acetamiprid 20% SP  
-                        **Brands:** Confidor, Media, Pride, Manik  
-                        **Dosage:** 0.5 ml (Imidacloprid) or 0.5 g (Acetamiprid) per liter of water
-                        """)
-                    elif "tomato_mosaic_virus" in major_class or "mosaic_virus" in major_class:
-                        st.markdown("""
-                        **Disease Type:** Tomato Mosaic Virus (ToMV) — viral disease, no chemical cure  
-                        **Management Strategy:**  
-                        - Remove and destroy infected plants to prevent spread  
-                        - Practice crop rotation and avoid planting tomatoes in the same soil consecutively  
-                        - Use resistant/tolerant varieties if available  
-                        - Disinfect tools and equipment regularly  
-                        - Control insect vectors (aphids, thrips) that may aid transmission  
-                        **Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
-                        """)
+                        st.markdown("**Chemical:** Wettable Sulphur (Sulfex) | **Dosage:** 2 g/L")
+                    elif "spider_mites" in major_class:
+                        st.markdown("**Chemical:** Abamectin (Vertimec) | **Dosage:** 0.5–1 ml/L")
+                    elif "tomato_yellow_leaf_curl_virus" in major_class:
+                        st.markdown("**Viral Disease:** Control Whiteflies using Imidacloprid (Confidor) 0.5 ml/L.")
+                    elif "healthy" in major_class:
+                        st.markdown("✅ **Healthy Leaf:** No chemical treatment needed. Maintain regular care.")
                     else:
-                        st.write("No specific chemical recommendation available for this class yet. Please consult a local horticulturist.")
+                        st.write("Consult a local specialist for specific treatment of this condition.")
                     st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
@@ -368,12 +237,10 @@ with tab3:
 # ==========================================
 with tab4:
     st.subheader("Weight Estimation")
-    
     if 'w_image' not in st.session_state: st.session_state.w_image = None
     if 'points' not in st.session_state: st.session_state.points = []
     
     w_file = st.file_uploader("Upload Image", type=['jpg','png'], key="t4_up")
-    
     if w_file:
         if st.session_state.w_image is None or st.session_state.w_file_name != w_file.name:
             st.session_state.w_image = Image.open(w_file).convert("RGB")
@@ -382,129 +249,46 @@ with tab4:
 
     if st.session_state.w_image:
         col_ctrl, col_img = st.columns([1, 2])
-        
         with col_ctrl:
-            c_btn1, c_btn2 = st.columns(2)
-            with c_btn1:
-                if st.button("↩️ Undo Point"):
-                    if st.session_state.points:
-                        st.session_state.points.pop()
-                        st.rerun()
-            with c_btn2:
-                if st.button("🗑️ Reset All"):
-                    st.session_state.points = []
-                    st.rerun()
-
-            st.write(f"Points Selected: **{len(st.session_state.points)} / 2**")
-            
-            if len(st.session_state.points) < 2:
-                st.info("👉 Step 1: Click the LEFT edge.\n👉 Step 2: Click the RIGHT edge.")
-            else:
-                st.success("✅ Reference Set!")
-
+            if st.button("↩️ Undo Point"):
+                if st.session_state.points: st.session_state.points.pop(); st.rerun()
+            if st.button("🗑️ Reset All"):
+                st.session_state.points = []; st.rerun()
             real_len = st.number_input("Real Distance (cm) between points:", 5.0)
-            
-            st.divider()
-            st.write("**Adjust Image Zoom:**")
-            zoom_width = st.slider("Width (px)", min_value=300, max_value=2000, value=700, step=50)
-            
+            zoom_width = st.slider("Width (px)", 300, 2000, 700, 50)
             calc_btn = st.button("⚖️ Calculate Weight", type="primary", disabled=(len(st.session_state.points) != 2))
 
         with col_img:
             base_w, base_h = st.session_state.w_image.size
-            ratio = base_h / base_w
-            new_h = int(zoom_width * ratio)
-            
-            display_img = st.session_state.w_image.resize((zoom_width, new_h))
+            display_img = st.session_state.w_image.resize((zoom_width, int(zoom_width * (base_h/base_w))))
             draw = ImageDraw.Draw(display_img)
-            
             for i, p in enumerate(st.session_state.points):
-                color = (255, 0, 0) if i == 0 else (0, 0, 255)
-                draw.ellipse((p[0]-8, p[1]-8, p[0]+8, p[1]+8), fill=color, outline="white", width=2)
-            
+                draw.ellipse((p[0]-8, p[1]-8, p[0]+8, p[1]+8), fill=(255,0,0) if i==0 else (0,0,255))
             if len(st.session_state.points) == 2:
                 draw.line(st.session_state.points, fill=(255, 255, 0), width=3)
-            
-            if len(st.session_state.points) < 2:
+                st.image(display_img)
+            else:
                 val = streamlit_image_coordinates(display_img, key="coords", width=zoom_width)
                 if val:
                     pt = (val['x'], val['y'])
                     if not st.session_state.points or st.session_state.points[-1] != pt:
-                        st.session_state.points.append(pt)
-                        st.rerun()
-            else:
-                st.image(display_img, caption="Reference Ready.")
+                        st.session_state.points.append(pt); st.rerun()
 
         if calc_btn and len(st.session_state.points) == 2:
-            st.divider()
             p1, p2 = st.session_state.points
             px_per_cm = math.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2) / real_len
-            
-            res = det_model(display_img, conf=0.35, iou=0.5, agnostic_nms=True)
-            
+            res = det_model(display_img, conf=0.35)
             img_res = np.array(display_img)
             img_res = cv2.cvtColor(img_res, cv2.COLOR_RGB2BGR)
-            
-            table_data = []
             total_weight = 0
-            
             for i, box in enumerate(res[0].boxes):
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                cls_name = det_model.names[int(box.cls[0])]
-                
                 w_cm = (x2-x1)/px_per_cm
-                l_cm = (y2-y1)/px_per_cm
-                
-                if abs(w_cm - l_cm) < (0.2 * l_cm):
-                    vol = (4/3) * math.pi * ((w_cm/2)**3)
-                else:
-                    vol = (4/3) * math.pi * (l_cm/2) * ((w_cm/2)**2)
-                
-                kg = (vol/1000000)*900
+                kg = ((4/3) * math.pi * ((w_cm/2)**3) / 1000000) * 900
                 total_weight += kg
-                
-                table_data.append({
-                    "No": i+1, 
-                    "Stage": cls_name, 
-                    "Weight (kg)": round(kg, 3)
-                })
-                
                 cv2.rectangle(img_res, (x1, y1), (x2, y2), (0,0,255), 2)
-                txt = f"{kg:.3f}kg"
-                f_scale = 0.5 if zoom_width < 500 else 0.8
-                cv2.putText(img_res, txt, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, f_scale, (0,0,255), 2)
+                cv2.putText(img_res, f"{kg:.3f}kg", (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,255), 2)
+            st.image(cv2.cvtColor(img_res, cv2.COLOR_BGR2RGB))
+            st.metric("Total Estimated Weight", f"{total_weight:.3f} kg")
 
-            final_res = cv2.cvtColor(img_res, cv2.COLOR_BGR2RGB)
-            
-            st.image(final_res, caption="Weight Analysis (Zoomed View)")
-            
-            if table_data:
-                table_data.append({
-                    "No": "TOTAL",
-                    "Stage": f"{len(table_data)} Fruits",
-                    "Weight (kg)": f"{total_weight:.3f}"
-                })
-            
-            st.markdown("### Detailed List")
-            
-            df = pd.DataFrame(table_data)
-            
-            def style_dataframe(x):
-                df_styler = pd.DataFrame('', index=x.index, columns=x.columns)
-                df_styler.iloc[:, 0] = 'font-weight: bold; background-color: #f0f2f6; color: black;'
-                df_styler.iloc[-1, :] = 'font-weight: bold; background-color: #ffcccc; color: black;'
-                df_styler.iloc[-1, 0] = 'font-weight: bold; background-color: #ff4b4b; color: white;'
-                return df_styler
-
-            st.dataframe(
-                df.style.apply(style_dataframe, axis=None), 
-                use_container_width=True, 
-                hide_index=True
-            )
-            
-            buf = io.BytesIO()
-            Image.fromarray(final_res).save(buf, format="JPEG")
-            st.download_button("⬇️ Download Image", buf.getvalue(), "weight_result.jpg", "image/jpeg")
-
-# --- Footer ---
 st.markdown('<p class="footer">By Sandesh Subedi</p>', unsafe_allow_html=True)
