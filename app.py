@@ -71,18 +71,22 @@ st.markdown("""
 # --- Title ---
 st.markdown('<p class="main-title">Advance Tomato Monitoring System</p>', unsafe_allow_html=True)
 
-# --- Load Models ---
+# --- Load Models (Now loading 3 models) ---
 @st.cache_resource
 def load_models():
-    # Ensure 'fruit.pt' and 'leafdisease.pt' are in the same folder as app.py
-    det_model = YOLO("fruit.pt") 
-    cls_model = YOLO("leafdisease.pt")
-    return det_model, cls_model
+    # 1. Fruit Detection
+    fruit_model = YOLO("fruit.pt") 
+    # 2. Leaf Object Detection (The Gatekeeper)
+    leaf_det_model = YOLO("leafbest.pt")
+    # 3. Leaf Disease Classification
+    leaf_cls_model = YOLO("leafdisease.pt")
+    
+    return fruit_model, leaf_det_model, leaf_cls_model
 
 try:
-    det_model, cls_model = load_models()
+    det_model, leaf_det_model, cls_model = load_models()
 except Exception as e:
-    st.error(f"Error loading models: {e}. Check if 'fruit.pt' exists.")
+    st.error(f"Error loading models: {e}. Please ensure 'fruit.pt', 'leafbest.pt', and 'leafdisease.pt' are in the repository.")
     st.stop()
 
 # --- Helper Functions ---
@@ -101,7 +105,6 @@ def get_color_bgr(cls_name):
     return COLORS["default"]
 
 # --- Tabs ---
-# Organized as requested: 1&2 (Detection/Video), 3&4 (Disease/Weight)
 tab1, tab2, tab3, tab4 = st.tabs([
     "🍎 1. Fruit Detector", 
     "🎥 2. Video Mode", 
@@ -126,7 +129,7 @@ with tab1:
             img_cv = np.array(original_pil)
             img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
             
-            # Confidence 0.50, NMS fix
+            # Confidence 0.50
             results = det_model(img_cv, conf=0.50, iou=0.5, agnostic_nms=True)
             
             counts = {"Red": 0, "Turning": 0, "Green": 0}
@@ -144,7 +147,7 @@ with tab1:
                         counts[key] += 1
                         found_key = True
                 
-                # Draw
+                # Draw Box & Text
                 color = get_color_bgr(cls_name)
                 label = f"{cls_name} {conf:.2f}"
                 
@@ -160,6 +163,7 @@ with tab1:
             
             with col2:
                 st.image(final_img, caption="Detected Tomatoes")
+                
                 final_pil = Image.fromarray(final_img)
                 buf = io.BytesIO()
                 final_pil.save(buf, format="JPEG")
@@ -170,7 +174,7 @@ with tab1:
             st.dataframe(pd.DataFrame([counts]))
 
 # ==========================================
-# TAB 2: VIDEO MODE (FULL PROCESSING)
+# TAB 2: VIDEO MODE
 # ==========================================
 with tab2:
     st.subheader("Video Detection")
@@ -182,11 +186,10 @@ with tab2:
         tfile.write(vid_file.read())
         cap = cv2.VideoCapture(tfile.name)
         
-        # Video Properties
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) # Total frames
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
         st.info(f"Video Loaded: {total_frames} frames ({total_frames/fps:.1f} seconds). Processing...")
         
@@ -194,7 +197,6 @@ with tab2:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(out_file, fourcc, fps, (width, height))
         
-        # Progress Bar
         progress_bar = st.progress(0)
         status_text = st.empty()
         
@@ -202,10 +204,8 @@ with tab2:
         
         while cap.isOpened():
             ret, frame = cap.read()
-            if not ret: 
-                break # End of video
+            if not ret: break
             
-            # Detect
             results = det_model(frame, conf=0.35, iou=0.5, agnostic_nms=True)
             
             for box in results[0].boxes:
@@ -218,7 +218,6 @@ with tab2:
             out.write(frame)
             frame_cnt += 1
             
-            # Update Progress (Every 5 frames to speed up UI)
             if frame_cnt % 5 == 0 or frame_cnt == total_frames:
                 percentage = frame_cnt / total_frames
                 progress_bar.progress(min(percentage, 1.0))
@@ -233,7 +232,7 @@ with tab2:
             st.download_button("⬇️ Download Annotated Video", f.read(), file_name="annotated_video.mp4", mime="video/mp4")
 
 # ==========================================
-# TAB 3: DISEASE CLASSIFIER
+# TAB 3: DISEASE CLASSIFIER (WITH DETECTION GATEKEEPER)
 # ==========================================
 with tab3:
     st.subheader("Leaf Disease Classification & Strategy")
@@ -244,108 +243,125 @@ with tab3:
         st.image(img, width=300)
         
         if st.button("Classify & Recommend"):
-            results = cls_model(img)
-            names = results[0].names
-            probs = results[0].probs
+            # --- STEP 1: DETECT LEAF ---
+            # Use leafbest.pt to check if there is a leaf
+            # Using slightly lower conf (0.25) to be safe (we just want to know if a leaf exists)
+            det_results = leaf_det_model(img, conf=0.25) 
             
-            st.divider()
-            st.markdown("### 📊 Analysis Results")
-            
-            top5_indices = probs.top5
-            top5_conf = probs.top5conf.tolist()
-            
-            col_res1, col_res2 = st.columns([1, 1])
-            with col_res1:
-                st.write("**Top 3 Confidence Levels:**")
-                for i in range(min(3, len(top5_indices))):
-                    idx = top5_indices[i]
-                    disease_name = names[idx]
-                    confidence = top5_conf[i]
-                    
-                    if i == 0:
-                        st.write(f"1. 🔴 **{disease_name}**: {confidence:.2%}")
+            # Check if any boxes were found
+            if len(det_results[0].boxes) == 0:
+                st.error("⚠️ **No Tomato Leaf Detected**")
+                st.warning("The system could not find a leaf in this image. Please upload a clear photo of a tomato leaf.")
+                st.info("Note: This prevents analyzing random objects like houses or cars.")
+                
+            else:
+                # --- STEP 2: CLASSIFY DISEASE ---
+                # A leaf was found, so now we run the classifier
+                
+                results = cls_model(img)
+                names = results[0].names
+                probs = results[0].probs
+                
+                # Get Top Predictions
+                top5_indices = probs.top5
+                top5_conf = probs.top5conf.tolist()
+                
+                # Display Results
+                st.divider()
+                st.markdown("### 📊 Analysis Results")
+                
+                col_res1, col_res2 = st.columns([1, 1])
+                with col_res1:
+                    st.write("**Top 3 Confidence Levels:**")
+                    for i in range(min(3, len(top5_indices))):
+                        idx = top5_indices[i]
+                        disease_name = names[idx]
+                        confidence = top5_conf[i]
+                        
+                        if i == 0:
+                            st.write(f"1. 🔴 **{disease_name}**: {confidence:.2%}")
+                        else:
+                            st.write(f"{i+1}. {disease_name}: {confidence:.2%}")
+                
+                top1_idx = probs.top1
+                top1_name = names[top1_idx]
+                
+                st.markdown("---")
+                st.markdown(f"#### 🛡️ Recommended Strategy for: :red[{top1_name}]")
+                
+                major_class = top1_name.lower().replace(" ", "_")
+                
+                with st.container():
+                    st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
+                    if "bacterial_spot" in major_class:
+                        st.markdown("""
+                        **Chemical:** Copper Oxychloride 50% WP  
+                        **Brands (Nepal):** Blitox, Blue Copper, Cu-50  
+                        **Dosage:** 2–3 g per liter of water  
+                        **Note:** Spray early morning or late evening to avoid leaf burn
+                        """)
+                    elif "early_blight" in major_class or "late_blight" in major_class:
+                        st.markdown("""
+                        **Protective Chemical:** Mancozeb 75% WP  
+                        **Brands:** Dithane M-45, Indofil M-45  
+                        **Curative Chemical:** Metalaxyl 8% + Mancozeb 64% WP  
+                        **Brands:** Krilaxyl, Ridomil Gold, Matco  
+                        **Dosage:** 2 g per liter of water
+                        """)
+                    elif "leaf_mold" in major_class:
+                        st.markdown("""
+                        **Chemical:** Carbendazim 50% WP  
+                        **Brands:** Bavistin, Beve-50  
+                        **Dosage:** 1–2 g per liter of water  
+                        **Alternative:** Chlorothalonil (Kavach)
+                        """)
+                    elif "powdery_mildew" in major_class:
+                        st.markdown("""
+                        **Chemical:** Wettable Sulphur 80% WP or Hexaconazole 5% EC  
+                        **Brands:** Sulfex, Contaf, Sitara  
+                        **Dosage:** 2 g per liter (Sulphur) or 2 ml per liter (Hexaconazole)
+                        """)
+                    elif "septoria" in major_class:
+                        st.markdown("""
+                        **Chemical:** Chlorothalonil 75% WP  
+                        **Brands:** Kavach, Ishan  
+                        **Dosage:** 2 g per liter of water
+                        """)
+                    elif "spider_mites" in major_class or "two_spotted_spider_mite" in major_class:
+                        st.markdown("""
+                        **Chemical:** Abamectin 1.8% or 1.9% EC  
+                        **Brands:** Vertimec, Abacin, V-mectin  
+                        **Dosage:** 0.5–1 ml per liter of water  
+                        **Note:** Spray underside of leaves where mites hide
+                        """)
+                    elif "target_spot" in major_class:
+                        st.markdown("""
+                        **Chemical:** Azoxystrobin 23% SC or Mancozeb  
+                        **Brands:** Amistar, Mirador  
+                        **Dosage:** 1 ml per liter of water
+                        """)
+                    elif "tomato_yellow_leaf_curl_virus" in major_class or "tylcv" in major_class:
+                        st.markdown("""
+                        **Disease Type:** Viral (TYLCV) — no chemical cure  
+                        **Vector Control:** Whitefly (Bemisia tabaci)  
+                        **Chemical:** Imidacloprid 17.8% SL or Acetamiprid 20% SP  
+                        **Brands:** Confidor, Media, Pride, Manik  
+                        **Dosage:** 0.5 ml (Imidacloprid) or 0.5 g (Acetamiprid) per liter of water
+                        """)
+                    elif "tomato_mosaic_virus" in major_class or "mosaic_virus" in major_class:
+                        st.markdown("""
+                        **Disease Type:** Tomato Mosaic Virus (ToMV) — viral disease, no chemical cure  
+                        **Management Strategy:**  
+                        - Remove and destroy infected plants to prevent spread  
+                        - Practice crop rotation and avoid planting tomatoes in the same soil consecutively  
+                        - Use resistant/tolerant varieties if available  
+                        - Disinfect tools and equipment regularly  
+                        - Control insect vectors (aphids, thrips) that may aid transmission  
+                        **Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
+                        """)
                     else:
-                        st.write(f"{i+1}. {disease_name}: {confidence:.2%}")
-            
-            top1_idx = probs.top1
-            top1_name = names[top1_idx]
-            
-            st.markdown("---")
-            st.markdown(f"#### 🛡️ Recommended Strategy for: :red[{top1_name}]")
-            
-            major_class = top1_name.lower().replace(" ", "_")
-            
-            with st.container():
-                st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
-                if "bacterial_spot" in major_class:
-                    st.markdown("""
-                    **Chemical:** Copper Oxychloride 50% WP  
-                    **Brands (Nepal):** Blitox, Blue Copper, Cu-50  
-                    **Dosage:** 2–3 g per liter of water  
-                    **Note:** Spray early morning or late evening to avoid leaf burn
-                    """)
-                elif "early_blight" in major_class or "late_blight" in major_class:
-                    st.markdown("""
-                    **Protective Chemical:** Mancozeb 75% WP  
-                    **Brands:** Dithane M-45, Indofil M-45  
-                    **Curative Chemical:** Metalaxyl 8% + Mancozeb 64% WP  
-                    **Brands:** Krilaxyl, Ridomil Gold, Matco  
-                    **Dosage:** 2 g per liter of water
-                    """)
-                elif "leaf_mold" in major_class:
-                    st.markdown("""
-                    **Chemical:** Carbendazim 50% WP  
-                    **Brands:** Bavistin, Beve-50  
-                    **Dosage:** 1–2 g per liter of water  
-                    **Alternative:** Chlorothalonil (Kavach)
-                    """)
-                elif "powdery_mildew" in major_class:
-                    st.markdown("""
-                    **Chemical:** Wettable Sulphur 80% WP or Hexaconazole 5% EC  
-                    **Brands:** Sulfex, Contaf, Sitara  
-                    **Dosage:** 2 g per liter (Sulphur) or 2 ml per liter (Hexaconazole)
-                    """)
-                elif "septoria" in major_class:
-                    st.markdown("""
-                    **Chemical:** Chlorothalonil 75% WP  
-                    **Brands:** Kavach, Ishan  
-                    **Dosage:** 2 g per liter of water
-                    """)
-                elif "spider_mites" in major_class or "two_spotted_spider_mite" in major_class:
-                    st.markdown("""
-                    **Chemical:** Abamectin 1.8% or 1.9% EC  
-                    **Brands:** Vertimec, Abacin, V-mectin  
-                    **Dosage:** 0.5–1 ml per liter of water  
-                    **Note:** Spray underside of leaves where mites hide
-                    """)
-                elif "target_spot" in major_class:
-                    st.markdown("""
-                    **Chemical:** Azoxystrobin 23% SC or Mancozeb  
-                    **Brands:** Amistar, Mirador  
-                    **Dosage:** 1 ml per liter of water
-                    """)
-                elif "tomato_yellow_leaf_curl_virus" in major_class or "tylcv" in major_class:
-                    st.markdown("""
-                    **Disease Type:** Viral (TYLCV) — no chemical cure  
-                    **Vector Control:** Whitefly (Bemisia tabaci)  
-                    **Chemical:** Imidacloprid 17.8% SL or Acetamiprid 20% SP  
-                    **Brands:** Confidor, Media, Pride, Manik  
-                    **Dosage:** 0.5 ml (Imidacloprid) or 0.5 g (Acetamiprid) per liter of water
-                    """)
-                elif "tomato_mosaic_virus" in major_class or "mosaic_virus" in major_class:
-                    st.markdown("""
-                    **Disease Type:** Tomato Mosaic Virus (ToMV) — viral disease, no chemical cure  
-                    **Management Strategy:**  
-                    - Remove and destroy infected plants to prevent spread  
-                    - Practice crop rotation and avoid planting tomatoes in the same soil consecutively  
-                    - Use resistant/tolerant varieties if available  
-                    - Disinfect tools and equipment regularly  
-                    - Control insect vectors (aphids, thrips) that may aid transmission  
-                    **Note:** Focus on prevention and hygiene, as chemical sprays are ineffective against viruses
-                    """)
-                else:
-                    st.write("No specific chemical recommendation available for this class yet. Please consult a local agronomist.")
-                st.markdown('</div>', unsafe_allow_html=True)
+                        st.write("No specific chemical recommendation available for this class yet. Please consult a local horticulturist.")
+                    st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
 # TAB 4: WEIGHT ESTIMATION
@@ -368,7 +384,6 @@ with tab4:
         col_ctrl, col_img = st.columns([1, 2])
         
         with col_ctrl:
-            # Added "Undo" and "Reset" buttons
             c_btn1, c_btn2 = st.columns(2)
             with c_btn1:
                 if st.button("↩️ Undo Point"):
@@ -383,7 +398,7 @@ with tab4:
             st.write(f"Points Selected: **{len(st.session_state.points)} / 2**")
             
             if len(st.session_state.points) < 2:
-                st.info("👉 Step 1: Click the LEFT edge of a tomato/ruler.\n👉 Step 2: Click the RIGHT edge.")
+                st.info("👉 Step 1: Click the LEFT edge.\n👉 Step 2: Click the RIGHT edge.")
             else:
                 st.success("✅ Reference Set!")
 
@@ -391,7 +406,7 @@ with tab4:
             
             st.divider()
             st.write("**Adjust Image Zoom:**")
-            zoom_width = st.slider("Image Width (px)", min_value=300, max_value=2000, value=700, step=50)
+            zoom_width = st.slider("Width (px)", min_value=300, max_value=2000, value=700, step=50)
             
             calc_btn = st.button("⚖️ Calculate Weight", type="primary", disabled=(len(st.session_state.points) != 2))
 
@@ -404,7 +419,7 @@ with tab4:
             draw = ImageDraw.Draw(display_img)
             
             for i, p in enumerate(st.session_state.points):
-                color = (255, 0, 0) if i == 0 else (0, 0, 255) # Red for 1st, Blue for 2nd
+                color = (255, 0, 0) if i == 0 else (0, 0, 255)
                 draw.ellipse((p[0]-8, p[1]-8, p[0]+8, p[1]+8), fill=color, outline="white", width=2)
             
             if len(st.session_state.points) == 2:
