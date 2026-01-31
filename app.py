@@ -101,6 +101,7 @@ def get_color_bgr(cls_name):
     return COLORS["default"]
 
 # --- Tabs ---
+# Organized as requested: 1&2 (Detection/Video), 3&4 (Disease/Weight)
 tab1, tab2, tab3, tab4 = st.tabs([
     "🍎 1. Fruit Detector", 
     "🎥 2. Video Mode", 
@@ -119,15 +120,13 @@ with tab1:
         original_pil = Image.open(img_file).convert("RGB")
         col1, col2 = st.columns(2)
         with col1:
-            # Shows original size (no use_container_width)
             st.image(original_pil, caption="Original Image")
         
         if col2.button("🔍 Detect Tomatoes", type="primary"):
             img_cv = np.array(original_pil)
             img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
             
-            # Confidence 0.50 as requested
-            # agnostic_nms=True prevents double counting overlaps
+            # Confidence 0.50, NMS fix
             results = det_model(img_cv, conf=0.50, iou=0.5, agnostic_nms=True)
             
             counts = {"Red": 0, "Turning": 0, "Green": 0}
@@ -145,7 +144,7 @@ with tab1:
                         counts[key] += 1
                         found_key = True
                 
-                # Draw Box & Text
+                # Draw
                 color = get_color_bgr(cls_name)
                 label = f"{cls_name} {conf:.2f}"
                 
@@ -160,9 +159,7 @@ with tab1:
             final_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
             
             with col2:
-                # Shows original size
                 st.image(final_img, caption="Detected Tomatoes")
-                
                 final_pil = Image.fromarray(final_img)
                 buf = io.BytesIO()
                 final_pil.save(buf, format="JPEG")
@@ -173,10 +170,11 @@ with tab1:
             st.dataframe(pd.DataFrame([counts]))
 
 # ==========================================
-# TAB 2: VIDEO MODE
+# TAB 2: VIDEO MODE (FULL PROCESSING)
 # ==========================================
 with tab2:
     st.subheader("Video Detection")
+    st.write("Upload a video. The system will process the **entire duration**.")
     vid_file = st.file_uploader("Upload Video", type=['mp4', 'avi', 'mov'], key="t2_up")
     
     if vid_file:
@@ -184,24 +182,30 @@ with tab2:
         tfile.write(vid_file.read())
         cap = cv2.VideoCapture(tfile.name)
         
-        st.info("Processing first 300 frames...")
-        
+        # Video Properties
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) # Total frames
+        
+        st.info(f"Video Loaded: {total_frames} frames ({total_frames/fps:.1f} seconds). Processing...")
         
         out_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4').name
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(out_file, fourcc, fps, (width, height))
         
-        prog = st.progress(0)
-        frame_cnt = 0
-        max_frames = 300
+        # Progress Bar
+        progress_bar = st.progress(0)
+        status_text = st.empty()
         
-        while cap.isOpened() and frame_cnt < max_frames:
+        frame_cnt = 0
+        
+        while cap.isOpened():
             ret, frame = cap.read()
-            if not ret: break
+            if not ret: 
+                break # End of video
             
+            # Detect
             results = det_model(frame, conf=0.35, iou=0.5, agnostic_nms=True)
             
             for box in results[0].boxes:
@@ -210,12 +214,20 @@ with tab2:
                 color = get_color_bgr(cls_name)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
                 cv2.putText(frame, cls_name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
+            
             out.write(frame)
             frame_cnt += 1
-            prog.progress(frame_cnt / max_frames)
+            
+            # Update Progress (Every 5 frames to speed up UI)
+            if frame_cnt % 5 == 0 or frame_cnt == total_frames:
+                percentage = frame_cnt / total_frames
+                progress_bar.progress(min(percentage, 1.0))
+                status_text.text(f"Processing: {int(percentage*100)}% complete ({frame_cnt}/{total_frames} frames)")
             
         cap.release()
         out.release()
+        progress_bar.progress(1.0)
+        status_text.success("Processing Complete!")
         
         with open(out_file, 'rb') as f:
             st.download_button("⬇️ Download Annotated Video", f.read(), file_name="annotated_video.mp4", mime="video/mp4")
@@ -236,7 +248,6 @@ with tab3:
             names = results[0].names
             probs = results[0].probs
             
-            # --- SHOW TOP 3 CONFIDENCE ---
             st.divider()
             st.markdown("### 📊 Analysis Results")
             
@@ -256,7 +267,6 @@ with tab3:
                     else:
                         st.write(f"{i+1}. {disease_name}: {confidence:.2%}")
             
-            # --- RECOMMENDATION (Top 1 Only) ---
             top1_idx = probs.top1
             top1_name = names[top1_idx]
             
@@ -358,20 +368,34 @@ with tab4:
         col_ctrl, col_img = st.columns([1, 2])
         
         with col_ctrl:
-            if st.button("🔄 Reset Points"):
-                st.session_state.points = []
-                st.rerun()
-            st.write(f"Points: {len(st.session_state.points)}/2")
-            real_len = st.number_input("Real Distance (cm)", 5.0)
+            # Added "Undo" and "Reset" buttons
+            c_btn1, c_btn2 = st.columns(2)
+            with c_btn1:
+                if st.button("↩️ Undo Point"):
+                    if st.session_state.points:
+                        st.session_state.points.pop()
+                        st.rerun()
+            with c_btn2:
+                if st.button("🗑️ Reset All"):
+                    st.session_state.points = []
+                    st.rerun()
+
+            st.write(f"Points Selected: **{len(st.session_state.points)} / 2**")
+            
+            if len(st.session_state.points) < 2:
+                st.info("👉 Step 1: Click the LEFT edge of a tomato/ruler.\n👉 Step 2: Click the RIGHT edge.")
+            else:
+                st.success("✅ Reference Set!")
+
+            real_len = st.number_input("Real Distance (cm) between points:", 5.0)
             
             st.divider()
             st.write("**Adjust Image Zoom:**")
-            zoom_width = st.slider("Width (px)", min_value=300, max_value=2000, value=700, step=50)
+            zoom_width = st.slider("Image Width (px)", min_value=300, max_value=2000, value=700, step=50)
             
-            calc_btn = st.button("⚖️ Calculate", disabled=(len(st.session_state.points) != 2))
+            calc_btn = st.button("⚖️ Calculate Weight", type="primary", disabled=(len(st.session_state.points) != 2))
 
         with col_img:
-            # Resize Logic for Display/Zoom
             base_w, base_h = st.session_state.w_image.size
             ratio = base_h / base_w
             new_h = int(zoom_width * ratio)
@@ -379,14 +403,14 @@ with tab4:
             display_img = st.session_state.w_image.resize((zoom_width, new_h))
             draw = ImageDraw.Draw(display_img)
             
-            # Draw Points/Lines
-            for p in st.session_state.points:
-                draw.ellipse((p[0]-10, p[1]-10, p[0]+10, p[1]+10), fill=(0,120,255), outline="white")
+            for i, p in enumerate(st.session_state.points):
+                color = (255, 0, 0) if i == 0 else (0, 0, 255) # Red for 1st, Blue for 2nd
+                draw.ellipse((p[0]-8, p[1]-8, p[0]+8, p[1]+8), fill=color, outline="white", width=2)
+            
             if len(st.session_state.points) == 2:
-                draw.line(st.session_state.points, fill=(0,120,255), width=3)
+                draw.line(st.session_state.points, fill=(255, 255, 0), width=3)
             
             if len(st.session_state.points) < 2:
-                st.write("👇 **Click 2 points on image:**")
                 val = streamlit_image_coordinates(display_img, key="coords", width=zoom_width)
                 if val:
                     pt = (val['x'], val['y'])
@@ -394,15 +418,13 @@ with tab4:
                         st.session_state.points.append(pt)
                         st.rerun()
             else:
-                st.image(display_img, caption="Reference Set. Ready to Calculate.")
+                st.image(display_img, caption="Reference Ready.")
 
         if calc_btn and len(st.session_state.points) == 2:
             st.divider()
             p1, p2 = st.session_state.points
             px_per_cm = math.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2) / real_len
             
-            # Detection on resized image
-            # iou=0.5 and agnostic_nms=True to fix double counting
             res = det_model(display_img, conf=0.35, iou=0.5, agnostic_nms=True)
             
             img_res = np.array(display_img)
@@ -426,14 +448,12 @@ with tab4:
                 kg = (vol/1000000)*900
                 total_weight += kg
                 
-                # Table Data: "No", "Stage", "Weight"
                 table_data.append({
                     "No": i+1, 
                     "Stage": cls_name, 
                     "Weight (kg)": round(kg, 3)
                 })
                 
-                # Annotation
                 cv2.rectangle(img_res, (x1, y1), (x2, y2), (0,0,255), 2)
                 txt = f"{kg:.3f}kg"
                 f_scale = 0.5 if zoom_width < 500 else 0.8
@@ -443,7 +463,6 @@ with tab4:
             
             st.image(final_res, caption="Weight Analysis (Zoomed View)")
             
-            # Add Total Row
             if table_data:
                 table_data.append({
                     "No": "TOTAL",
@@ -453,17 +472,12 @@ with tab4:
             
             st.markdown("### Detailed List")
             
-            # --- Table Styling ---
             df = pd.DataFrame(table_data)
             
             def style_dataframe(x):
-                # Empty style df
                 df_styler = pd.DataFrame('', index=x.index, columns=x.columns)
-                # Highlight 1st Column (No)
                 df_styler.iloc[:, 0] = 'font-weight: bold; background-color: #f0f2f6; color: black;'
-                # Highlight Last Row (TOTAL)
                 df_styler.iloc[-1, :] = 'font-weight: bold; background-color: #ffcccc; color: black;'
-                # Highlight Specific Total Cell
                 df_styler.iloc[-1, 0] = 'font-weight: bold; background-color: #ff4b4b; color: white;'
                 return df_styler
 
