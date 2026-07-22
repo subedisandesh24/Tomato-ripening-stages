@@ -19,19 +19,19 @@ st.set_page_config(layout="wide", page_title="Advance Tomato Monitoring System")
 # --- Custom CSS (Larger Fonts & Styling) ---
 st.markdown("""
     <style>
-    /* Main Title */
+    /* Main Title (Increased from 3.5rem to 4.8rem) */
     .main-title {
-        font-size: 3.5rem;
-        font-weight: 800;
+        font-size: 4.8rem !important; 
+        font-weight: 900 !important;
         color: #ff4b4b;
         text-align: center;
-        margin-bottom: 20px;
+        margin-bottom: 25px;
     }
 ...
-    /* Tab Labels */
-    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
-        font-size: 22px;
-        font-weight: bold;
+    /* Tab Labels (Increased from 22px to 30px with simplified, robust selector) */
+    .stTabs [data-baseweb="tab-list"] button p {
+        font-size: 30px !important;
+        font-weight: bold !important;
     }
     
     /* Headers */
