@@ -30,7 +30,7 @@ st.markdown("""
 ...
     /* Tab Labels */
     .stTabs [data-baseweb="tab-list"] button p {
-        font-size: 50px !important;
+        font-size: 22px !important;
         font-weight: bold !important;
     }
     
@@ -41,7 +41,7 @@ st.markdown("""
     
     /* Buttons */
     .stButton button {
-        font-size: 20px !important;
+        font-size: 22px !important;
         font-weight: 600 !important;
     }
 
