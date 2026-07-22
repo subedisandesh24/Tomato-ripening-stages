@@ -28,9 +28,20 @@ st.markdown("""
         margin-bottom: 25px;
     }
 ...
-    /* Tab Labels */
+    /* Tab Labels - Increased font size and physical button size */
+    button[data-baseweb="tab"] {
+        height: 70px !important;       /* Increases the physical height of the tab button */
+        padding-left: 30px !important;  /* Adds space on the left side of each tab */
+        padding-right: 30px !important; /* Adds space on the right side of each tab */
+    }
+    
+    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
+        font-size: 28px !important;     /* Increases the tab label text size */
+        font-weight: bold !important;
+    }
+    
     .stTabs [data-baseweb="tab-list"] button p {
-        font-size: 22px !important;
+        font-size: 28px !important;     /* Fallback for alternative Streamlit rendering versions */
         font-weight: bold !important;
     }
     
