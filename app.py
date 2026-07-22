@@ -27,12 +27,7 @@ st.markdown("""
         text-align: center;
         margin-bottom: 20px;
     }
-    
-    /* Global Font Increase */
-    html, body, [class*="css"] {
-        font-size: 18px;
-    }
-    
+...
     /* Tab Labels */
     .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
         font-size: 22px;
