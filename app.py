@@ -27,22 +27,33 @@ st.markdown("""
         text-align: center;
         margin-bottom: 25px;
     }
-...
-    /* Tab Labels - Increased font size and physical button size */
+
+    /* Tab Labels - Responsive layout for both Laptop & Mobile */
     button[data-baseweb="tab"] {
-        height: 70px !important;       /* Increases the physical height of the tab button */
-        padding-left: 30px !important;  /* Adds space on the left side of each tab */
-        padding-right: 30px !important; /* Adds space on the right side of each tab */
+        height: 60px !important;       /* Comfortable button height on desktops */
+        padding-left: 20px !important;  
+        padding-right: 20px !important; 
     }
     
-    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
-        font-size: 28px !important;     /* Increases the tab label text size */
+    button[data-baseweb="tab"] p,
+    button[data-baseweb="tab"] div,
+    button[data-baseweb="tab"] span {
+        font-size: 22px !important;     /* Large font size on laptops/desktops */
         font-weight: bold !important;
     }
     
-    .stTabs [data-baseweb="tab-list"] button p {
-        font-size: 28px !important;     /* Fallback for alternative Streamlit rendering versions */
-        font-weight: bold !important;
+    /* Responsive adjustment for Mobile screens */
+    @media only screen and (max-width: 768px) {
+        button[data-baseweb="tab"] {
+            height: 50px !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+        }
+        button[data-baseweb="tab"] p,
+        button[data-baseweb="tab"] div,
+        button[data-baseweb="tab"] span {
+            font-size: 15px !important; /* Scaled down slightly to fit on small mobile screens */
+        }
     }
     
     /* Headers */
@@ -84,10 +95,9 @@ st.markdown('<p class="main-title">Advance Tomato Monitoring System</p>', unsafe
 # --- Load Models (Updated to include leafbest.pt) ---
 @st.cache_resource
 def load_models():
-    # Ensure all .pt files are in the main directory
     det_model = YOLO("fruit.pt") 
     cls_model = YOLO("leafdisease.pt")
-    leaf_det_model = YOLO("leafbest.pt") # New Model for Detection
+    leaf_det_model = YOLO("leafbest.pt") 
     return det_model, cls_model, leaf_det_model
 
 try:
@@ -98,9 +108,9 @@ except Exception as e:
 
 # --- Helper Functions ---
 COLORS = {
-    "red": (0, 0, 255),       # Red (BGR)
-    "green": (0, 255, 0),     # Green
-    "turning": (0, 255, 255), # Yellow
+    "red": (0, 0, 255),       
+    "green": (0, 255, 0),     
+    "turning": (0, 255, 255), 
     "default": (255, 255, 255)
 }
 
@@ -158,11 +168,20 @@ with tab1:
                     
                     cv2.rectangle(img_cv, (x1, y1), (x2, y2), color, 4)
                     
-                    font_scale = 1.5 
-                    thickness = 3
+                    # Dynamic text and background size scaling based on bounding box size
+                    box_width = x2 - x1
+                    font_scale = max(0.4, min(0.85, box_width / 220.0))
+                    thickness = max(1, int(font_scale * 2))
+                    
                     (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
-                    cv2.rectangle(img_cv, (x1, y1 - h - 10), (x1 + w, y1), color, -1)
-                    cv2.putText(img_cv, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0,0,0), thickness)
+                    
+                    # Prevent clipping of label backgrounds if boxes are at the top edge
+                    text_y = y1 - 4 if y1 - h - 6 > 0 else y1 + h + 4
+                    bg_y1 = y1 - h - 6 if y1 - h - 6 > 0 else y1
+                    bg_y2 = y1 if y1 - h - 6 > 0 else y1 + h + 6
+                    
+                    cv2.rectangle(img_cv, (x1, bg_y1), (x1 + w + 4, bg_y2), color, -1)
+                    cv2.putText(img_cv, label, (x1 + 2, text_y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0,0,0), thickness)
 
                 final_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
                 
@@ -218,8 +237,14 @@ with tab2:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 cls_name = det_model.names[int(box.cls[0])]
                 color = get_color_bgr(cls_name)
+                
+                # Dynamic sizing for video frames
+                box_width = x2 - x1
+                v_font_scale = max(0.4, min(0.8, box_width / 250.0))
+                v_thickness = max(1, int(v_font_scale * 2))
+                
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
-                cv2.putText(frame, cls_name, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
+                cv2.putText(frame, cls_name, (x1, y1-8), cv2.FONT_HERSHEY_SIMPLEX, v_font_scale, color, v_thickness)
             
             out.write(frame)
             frame_cnt += 1
@@ -250,21 +275,15 @@ with tab3:
             st.image(img, width=300)
             
             if st.button("Classify & Recommend"):
-                # --- STEP 1: Detect Leaf using leafbest.pt ---
-                # Convert to OpenCV format for detection
                 img_cv = np.array(img)
                 img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
                 
-                # Run Detection (conf > 0.4 as requested)
                 det_results = leaf_det_model(img_cv, conf=0.40)
                 
-                # Check if ANY leaf was detected
                 if len(det_results[0].boxes) == 0:
                     st.error("🚫 No leaf detected")
                     st.warning("Please upload a clear image containing a tomato leaf.")
                 else:
-                    # --- STEP 2: Leaf Found -> Proceed to Classification ---
-                    
                     results = cls_model(img)
                     names = results[0].names
                     probs = results[0].probs
@@ -481,10 +500,15 @@ with tab4:
                 
                 cv2.rectangle(img_res, (x1, y1), (x2, y2), (0,0,255), 2)
                 txt = f"{kg:.3f}kg"
-                f_scale = 0.5 if zoom_width < 500 else 0.8
-                cv2.putText(img_res, txt, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, f_scale, (0,0,255), 2)
+                
+                # Dynamic text sizing for weight labels based on bounding box width
+                box_width = x2 - x1
+                f_scale = max(0.4, min(0.8, box_width / 250.0))
+                f_thickness = max(1, int(f_scale * 2))
+                
+                cv2.putText(img_res, txt, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, f_scale, (0,0,255), f_thickness)
 
-            final_res = cv2.cvtColor(img_res, cv2.COLOR_BGR2RGB)
+            final_res = cv2.cvtColor(img_res, cv2.COLOR_RGB2BGR)
             
             st.image(final_res, caption="Weight Analysis (Zoomed View)")
             
