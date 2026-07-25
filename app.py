@@ -28,31 +28,42 @@ st.markdown("""
         margin-bottom: 25px;
     }
 
-    /* Tab Labels - Responsive layout for both Laptop & Mobile */
-    button[data-baseweb="tab"] {
-        height: 60px !important;       /* Comfortable button height on desktops */
-        padding-left: 20px !important;  
-        padding-right: 20px !important; 
-    }
-    
-    button[data-baseweb="tab"] p,
-    button[data-baseweb="tab"] div,
-    button[data-baseweb="tab"] span {
-        font-size: 22px !important;     /* Large font size on laptops/desktops */
-        font-weight: bold !important;
-    }
-    
-    /* Responsive adjustment for Mobile screens */
-    @media only screen and (max-width: 768px) {
-        button[data-baseweb="tab"] {
-            height: 50px !important;
-            padding-left: 8px !important;
-            padding-right: 8px !important;
+    /* ==========================================
+       TAB STYLING (LAPTOP & DESKTOP ONLY)
+       ========================================== */
+    @media only screen and (min-width: 1024px) {
+        /* Set physical tab button height and margins */
+        .stTabs [data-baseweb="tab-list"] button {
+            height: 75px !important;
+            padding-left: 25px !important;
+            padding-right: 25px !important;
         }
-        button[data-baseweb="tab"] p,
-        button[data-baseweb="tab"] div,
-        button[data-baseweb="tab"] span {
-            font-size: 15px !important; /* Scaled down slightly to fit on small mobile screens */
+        /* Specific deep selectors for inner label text elements */
+        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p,
+        .stTabs [data-baseweb="tab-list"] button p,
+        .stTabs [data-baseweb="tab-list"] button span,
+        .stTabs [data-baseweb="tab-list"] button div {
+            font-size: 28px !important;   /* Significantly increased size on laptop */
+            font-weight: bold !important;
+            white-space: nowrap !important;
+        }
+    }
+
+    /* ==========================================
+       TAB STYLING (MOBILE & TABLET ONLY)
+       ========================================== */
+    @media only screen and (max-width: 1023px) {
+        .stTabs [data-baseweb="tab-list"] button {
+            height: 50px !important;
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+        }
+        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p,
+        .stTabs [data-baseweb="tab-list"] button p,
+        .stTabs [data-baseweb="tab-list"] button span,
+        .stTabs [data-baseweb="tab-list"] button div {
+            font-size: 15px !important;   /* Scaled down on mobile to prevent wrapping issues */
+            font-weight: bold !important;
         }
     }
     
@@ -168,14 +179,12 @@ with tab1:
                     
                     cv2.rectangle(img_cv, (x1, y1), (x2, y2), color, 4)
                     
-                    # Dynamic text and background size scaling based on bounding box size
                     box_width = x2 - x1
                     font_scale = max(0.4, min(0.85, box_width / 220.0))
                     thickness = max(1, int(font_scale * 2))
                     
                     (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
                     
-                    # Prevent clipping of label backgrounds if boxes are at the top edge
                     text_y = y1 - 4 if y1 - h - 6 > 0 else y1 + h + 4
                     bg_y1 = y1 - h - 6 if y1 - h - 6 > 0 else y1
                     bg_y2 = y1 if y1 - h - 6 > 0 else y1 + h + 6
@@ -238,7 +247,6 @@ with tab2:
                 cls_name = det_model.names[int(box.cls[0])]
                 color = get_color_bgr(cls_name)
                 
-                # Dynamic sizing for video frames
                 box_width = x2 - x1
                 v_font_scale = max(0.4, min(0.8, box_width / 250.0))
                 v_thickness = max(1, int(v_font_scale * 2))
@@ -263,7 +271,7 @@ with tab2:
             st.download_button("⬇️ Download Annotated Video", f.read(), file_name="annotated_video.mp4", mime="video/mp4")
 
 # ==========================================
-# TAB 3: DISEASE CLASSIFIER (Updated with leafbest.pt)
+# TAB 3: DISEASE CLASSIFIER
 # ==========================================
 with tab3:
     st.subheader("Leaf Disease Classification & Strategy")
@@ -501,14 +509,13 @@ with tab4:
                 cv2.rectangle(img_res, (x1, y1), (x2, y2), (0,0,255), 2)
                 txt = f"{kg:.3f}kg"
                 
-                # Dynamic text sizing for weight labels based on bounding box width
                 box_width = x2 - x1
                 f_scale = max(0.4, min(0.8, box_width / 250.0))
                 f_thickness = max(1, int(f_scale * 2))
                 
                 cv2.putText(img_res, txt, (x1, y1-5), cv2.FONT_HERSHEY_SIMPLEX, f_scale, (0,0,255), f_thickness)
 
-            final_res = cv2.cvtColor(img_res, cv2.COLOR_RGB2BGR)
+            final_res = cv2.cvtColor(img_res, cv2.COLOR_BGR2RGB)
             
             st.image(final_res, caption="Weight Analysis (Zoomed View)")
             
