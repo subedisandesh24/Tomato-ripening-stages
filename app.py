@@ -19,51 +19,60 @@ st.set_page_config(layout="wide", page_title="Advance Tomato Monitoring System")
 # --- Custom CSS (Larger Fonts & Styling) ---
 st.markdown("""
     <style>
-    /* Main Title */
+    /* ==========================================
+       MAIN TITLE STYLING
+       ========================================== */
     .main-title {
-        font-size: 3.5rem !important; 
         font-weight: 900 !important;
         color: #ff4b4b;
         text-align: center;
         margin-bottom: 25px;
+        font-size: 3.5rem !important; /* Ideal large size for laptops */
     }
 
     /* ==========================================
-       TAB STYLING (LAPTOP & DESKTOP ONLY)
+       TAB STYLING (DEFAULT: LAPTOP / DESKTOP)
        ========================================== */
-    @media only screen and (min-width: 1024px) {
-        /* Set physical tab button height and margins */
-        .stTabs [data-baseweb="tab-list"] button {
-            height: 75px !important;
-            padding-left: 25px !important;
-            padding-right: 25px !important;
-        }
-        /* Specific deep selectors for inner label text elements */
-        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p,
-        .stTabs [data-baseweb="tab-list"] button p,
-        .stTabs [data-baseweb="tab-list"] button span,
-        .stTabs [data-baseweb="tab-list"] button div {
-            font-size: 28px !important;   /* Significantly increased size on laptop */
-            font-weight: bold !important;
-            white-space: nowrap !important;
-        }
+    .stTabs [data-baseweb="tab-list"] button,
+    .stTabs button[data-baseweb="tab"] {
+        height: 70px !important;
+        padding-left: 20px !important;  
+        padding-right: 20px !important; 
+    }
+    
+    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p,
+    .stTabs [data-baseweb="tab-list"] button p,
+    .stTabs button[data-baseweb="tab"] p,
+    .stTabs button[data-baseweb="tab"] span,
+    .stTabs button[data-baseweb="tab"] div {
+        font-size: 26px !important;     /* Large and highly visible on laptop */
+        font-weight: bold !important;
+        white-space: nowrap !important;
     }
 
     /* ==========================================
-       TAB STYLING (MOBILE & TABLET ONLY)
+       RESPONSIVE OVERRIDES (MOBILE & TABLET: UNDER 768px)
        ========================================== */
-    @media only screen and (max-width: 1023px) {
-        .stTabs [data-baseweb="tab-list"] button {
-            height: 50px !important;
-            padding-left: 10px !important;
-            padding-right: 10px !important;
+    @media only screen and (max-width: 768px) {
+        /* Scale down the title so it fits beautifully on small screens */
+        .main-title {
+            font-size: 2.0rem !important; 
+            margin-bottom: 15px;
+        }
+
+        /* Adjust tab spacing and scale labels down to fit mobile screens */
+        .stTabs [data-baseweb="tab-list"] button,
+        .stTabs button[data-baseweb="tab"] {
+            height: 48px !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
         }
         .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p,
         .stTabs [data-baseweb="tab-list"] button p,
-        .stTabs [data-baseweb="tab-list"] button span,
-        .stTabs [data-baseweb="tab-list"] button div {
-            font-size: 15px !important;   /* Scaled down on mobile to prevent wrapping issues */
-            font-weight: bold !important;
+        .stTabs button[data-baseweb="tab"] p,
+        .stTabs button[data-baseweb="tab"] span,
+        .stTabs button[data-baseweb="tab"] div {
+            font-size: 15px !important;  /* Fits cleanly on mobile screens */
         }
     }
     
@@ -103,7 +112,7 @@ st.markdown("""
 # --- Title ---
 st.markdown('<p class="main-title">Advance Tomato Monitoring System</p>', unsafe_allow_html=True)
 
-# --- Load Models (Updated to include leafbest.pt) ---
+# --- Load Models ---
 @st.cache_resource
 def load_models():
     det_model = YOLO("fruit.pt") 
